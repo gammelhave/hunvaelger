@@ -3,28 +3,33 @@
 import { useMemo } from 'react';
 import { QRCodeCanvas } from 'qrcode.react';
 
-const MOCK_PROFILES = {
+const DATA = {
   AB12: { alias: "Laura", interesser: ["Friluftsliv", "Kunst", "Gode samtaler"], note: "Spørg mig om min favoritvandrerute" },
-  CD34: { alias: "Sara", interesser: ["Vin & mad", "Film", "Rejser"], note: "Elsker små vinbarer" }
+  CD34: { alias: "Sara",  interesser: ["Vin & mad", "Film", "Rejser"],          note: "Elsker små vinbarer" }
 };
 
-export default function ProfilePage({ params }) {
-  const id = (params?.id || '').toUpperCase();
-  const p = MOCK_PROFILES[id];
+export default function Page({ searchParams }) {
+  const id = (searchParams?.id || '').toUpperCase();
+  const p = DATA[id];
 
   const url = useMemo(() => (
     typeof window !== 'undefined'
-      ? `${window.location.origin}/p/${id}`
-      : `https://hunvaelger.dk/p/${id}`
+      ? `${window.location.origin}/p?id=${id}`
+      : `https://hunvaelger.vercel.app/p?id=${id}`
   ), [id]);
 
+  if (!id) {
+    return <main style={{padding:24,fontFamily:"system-ui"}}>
+      <h1>Profil</h1>
+      <p>Tilføj et ID i adressen, fx <code>/p?id=AB12</code></p>
+    </main>;
+  }
+
   if (!p) {
-    return (
-      <main style={{ padding: 24, fontFamily: "system-ui, sans-serif" }}>
-        <h1>Profil ikke fundet</h1>
-        <p>Ingen light-profil for ID <b>{id}</b>.</p>
-      </main>
-    );
+    return <main style={{padding:24,fontFamily:"system-ui"}}>
+      <h1>Profil ikke fundet</h1>
+      <p>Ingen light-profil for ID <b>{id}</b>. Prøv fx <a href="/p?id=AB12">AB12</a> eller <a href="/p?id=CD34">CD34</a>.</p>
+    </main>;
   }
 
   return (
