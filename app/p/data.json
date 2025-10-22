@@ -1,0 +1,17 @@
+{
+  "AB12": {
+    "alias": "Laura",
+    "interesser": ["Friluftsliv", "Kunst", "Gode samtaler"],
+    "note": "Spørg mig om min favoritvandrerute"
+  },
+  "CD34": {
+    "alias": "Sara",
+    "interesser": ["Vin & mad", "Film", "Rejser"],
+    "note": "Elsker små vinbarer"
+  },
+  "EF56": {
+    "alias": "Mette",
+    "interesser": ["Heste", "Natur", "Madlavning"],
+    "note": "Spørg mig om gården og dyrene 🐴"
+  }
+}
