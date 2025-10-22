@@ -1,5 +1,4 @@
 export const metadata = { title: "HunVælger" };
-
 export default function RootLayout({ children }) {
   return (
     <html lang="da">
