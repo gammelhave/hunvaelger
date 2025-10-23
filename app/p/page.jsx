@@ -1,22 +1,21 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { QRCodeCanvas } from 'qrcode.react';
 
-export default function Page({ searchParams }) {
-  const [data, setData] = useState(null);
-  const [err, setErr] = useState(null);
+export default function AdminPage() {
+  const [data, setData] = useState({});
+  const [q, setQ] = useState('');
 
-  const id = (searchParams?.id || '').toUpperCase();
-
-  useEffect(() => {
+    useEffect(() => {
     let alive = true;
     fetch('/api/profiles')
       .then(r => r.json())
       .then(j => { if (alive) setData(j); })
-      .catch(e => { if (alive) setErr(String(e)); });
+      .catch(() => setData({}));
     return () => { alive = false; };
   }, []);
+
+  
 
   const p = data?.[id];
 
