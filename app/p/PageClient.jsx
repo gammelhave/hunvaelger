@@ -5,9 +5,23 @@ import { useEffect, useMemo, useState } from 'react';
 import { QRCodeCanvas } from 'qrcode.react';
 
 export default function PageClient({ searchParams }) {
+  // 1) Tag id fra props hvis den findes
+  const idFromProps = (searchParams?.id ?? '').toString();
+
+  // 2) State til id (så vi kan sætte fra URL hvis props mangler)
+  const [id, setId] = useState(idFromProps.toUpperCase());
+
+  // 3) Fallback: læs id fra URL i browseren, hvis props ikke gav noget
+  useEffect(() => {
+    if (!idFromProps && typeof window !== 'undefined') {
+      const sp = new URLSearchParams(window.location.search);
+      const qid = sp.get('id') || '';
+      if (qid) setId(qid.toUpperCase());
+    }
+  }, [idFromProps]);
+
   const [data, setData] = useState(null);
   const [err, setErr] = useState(null);
-  const id = (searchParams?.id || '').toUpperCase();
 
   useEffect(() => {
     let alive = true;
@@ -19,6 +33,7 @@ export default function PageClient({ searchParams }) {
   }, []);
 
   const p = data?.[id];
+
   const url = useMemo(() => (
     typeof window !== 'undefined'
       ? `${window.location.origin}/p?id=${id}`
