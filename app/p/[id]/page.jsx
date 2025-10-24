@@ -1,8 +1,18 @@
+import { headers } from "next/headers";
+
 export const dynamic = "force-dynamic";
 
 async function fetchProfile(id) {
-  const base = process.env.NEXT_PUBLIC_BASE_URL || "";
-  const res = await fetch(`${base}/api/profiles?id=${id}`, { cache: "no-store" });
+  const h = headers();
+  const proto = h.get("x-forwarded-proto") ?? "https";
+  const host = h.get("x-forwarded-host") ?? h.get("host");
+  const origin =
+    process.env.NEXT_PUBLIC_BASE_URL || (host ? `${proto}://${host}` : "");
+
+  const res = await fetch(`${origin}/api/profiles?id=${id}`, {
+    cache: "no-store",
+  });
+  if (!res.ok) return null;
   const json = await res.json();
   return json?.ok ? json.data : null;
 }
@@ -13,7 +23,9 @@ export default async function ProfileDetail({ params }) {
   if (!p) {
     return (
       <main className="mx-auto max-w-3xl p-6">
-        <a href="/p" className="text-sm underline opacity-70">← Tilbage</a>
+        <a href="/p" className="text-sm underline opacity-70">
+          ← Tilbage
+        </a>
         <h1 className="mt-4 text-2xl font-bold">Profil blev ikke fundet.</h1>
       </main>
     );
@@ -21,7 +33,9 @@ export default async function ProfileDetail({ params }) {
 
   return (
     <main className="mx-auto max-w-3xl p-6 space-y-6">
-      <a href="/p" className="text-sm underline opacity-70">← Tilbage</a>
+      <a href="/p" className="text-sm underline opacity-70">
+        ← Tilbage
+      </a>
 
       <div className="rounded-2xl border p-4">
         <div className="flex flex-col gap-6 sm:flex-row">
@@ -38,12 +52,16 @@ export default async function ProfileDetail({ params }) {
 
           <div className="sm:flex-1">
             <h1 className="text-3xl font-bold">{p.name}</h1>
-            <p className="opacity-70">{p.age} • {p.city}</p>
+            <p className="opacity-70">
+              {p.age} • {p.city}
+            </p>
             <p className="mt-3">{p.bio}</p>
 
             <div className="mt-4 flex flex-wrap gap-2">
               {(p.interests || []).map((t) => (
-                <span key={t} className="rounded-full border px-3 py-1 text-sm">{t}</span>
+                <span key={t} className="rounded-full border px-3 py-1 text-sm">
+                  {t}
+                </span>
               ))}
             </div>
 
