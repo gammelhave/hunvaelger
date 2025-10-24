@@ -12,26 +12,35 @@ export default async function ProfilesPage() {
 
   return (
     <main className="mx-auto max-w-5xl p-6 space-y-6">
-      <h1 className="text-3xl font-bold">Profiler</h1>
+      <header className="flex items-end justify-between">
+        <h1 className="text-3xl font-bold">Profiler</h1>
+        <a href="/" className="text-sm underline opacity-70">Forside</a>
+      </header>
+
       <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
         {list.map((p) => (
           <a
             key={p.id}
             href={`/p/${p.id}`}
-            className="rounded-2xl border p-4 hover:shadow"
+            className="rounded-2xl border p-4 hover:shadow transition"
           >
             <div className="aspect-[4/3] w-full overflow-hidden rounded-xl bg-gray-100 flex items-center justify-center">
-              {p.photo ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={p.photo} alt={p.name} className="h-full w-full object-cover" />
-              ) : (
-                <span className="text-sm opacity-60">Ingen billede</span>
-              )}
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={p.photo || "/avatars/placeholder.jpg"}
+                alt={p.name}
+                className="h-full w-full object-cover"
+              />
             </div>
             <div className="mt-3">
               <div className="text-lg font-semibold">{p.name}</div>
               <div className="text-sm opacity-70">{p.age} • {p.city}</div>
-              <div className="mt-2 text-sm">{p.bio}</div>
+              <p className="mt-2 text-sm line-clamp-2">{p.bio}</p>
+              <div className="mt-3 flex flex-wrap gap-2">
+                {(p.interests || []).slice(0, 3).map((t) => (
+                  <span key={t} className="rounded-full border px-3 py-1 text-xs">{t}</span>
+                ))}
+              </div>
             </div>
           </a>
         ))}
