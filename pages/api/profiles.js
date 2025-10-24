@@ -13,6 +13,20 @@ function validateProfile(p, isUpdate = false) {
   return null;
 }
 
+function readBody(req) {
+  // Next pages-API giver som udgangspunkt et objekt i req.body
+  // men håndterer også hvis nogen sender en rå streng
+  if (req?.body == null) return {};
+  if (typeof req.body === "string") {
+    try {
+      return JSON.parse(req.body);
+    } catch {
+      return "__INVALID__";
+    }
+  }
+  return req.body; // allerede et objekt
+}
+
 export default function handler(req, res) {
   const { method, query } = req;
   const { id } = query;
@@ -27,55 +41,57 @@ export default function handler(req, res) {
   }
 
   if (method === "POST") {
-    try {
-      const body = JSON.parse(req.body ?? "{}");
-      const error = validateProfile(body, false);
-      if (error) return res.status(400).json({ ok: false, error });
-
-      if (store.some((x) => x.id === body.id))
-        return res.status(409).json({ ok: false, error: "id already exists" });
-
-      // normaliser
-      body.age = Number(body.age);
-      body.interests = Array.isArray(body.interests)
-        ? body.interests
-        : (body.interests || "")
-            .split(",")
-            .map((s) => s.trim())
-            .filter(Boolean);
-
-      store.push(body);
-      return res.status(201).json({ ok: true, data: body });
-    } catch (e) {
+    const body = readBody(req);
+    if (body === "__INVALID__") {
       return res.status(400).json({ ok: false, error: "Invalid JSON" });
     }
+
+    const error = validateProfile(body, false);
+    if (error) return res.status(400).json({ ok: false, error });
+
+    if (store.some((x) => x.id === body.id)) {
+      return res.status(409).json({ ok: false, error: "id already exists" });
+    }
+
+    // normaliser
+    body.age = Number(body.age);
+    body.interests = Array.isArray(body.interests)
+      ? body.interests
+      : (body.interests || "")
+          .split(",")
+          .map((s) => s.trim())
+          .filter(Boolean);
+
+    store.push(body);
+    return res.status(201).json({ ok: true, data: body });
   }
 
   if (method === "PUT") {
     if (!id) return res.status(400).json({ ok: false, error: "id query required" });
+
     const idx = store.findIndex((x) => x.id === String(id));
     if (idx === -1) return res.status(404).json({ ok: false, error: "Not found" });
 
-    try {
-      const body = JSON.parse(req.body ?? "{}");
-      const error = validateProfile(body, true);
-      if (error) return res.status(400).json({ ok: false, error });
-
-      const next = { ...store[idx], ...body };
-      if (next.age) next.age = Number(next.age);
-      if (body.interests) {
-        next.interests = Array.isArray(body.interests)
-          ? body.interests
-          : body.interests
-              .split(",")
-              .map((s) => s.trim())
-              .filter(Boolean);
-      }
-      store[idx] = next;
-      return res.status(200).json({ ok: true, data: next });
-    } catch {
+    const body = readBody(req);
+    if (body === "__INVALID__") {
       return res.status(400).json({ ok: false, error: "Invalid JSON" });
     }
+
+    const error = validateProfile(body, true);
+    if (error) return res.status(400).json({ ok: false, error });
+
+    const next = { ...store[idx], ...body };
+    if (next.age != null) next.age = Number(next.age);
+    if (body.interests != null) {
+      next.interests = Array.isArray(body.interests)
+        ? body.interests
+        : body.interests
+            .split(",")
+            .map((s) => s.trim())
+            .filter(Boolean);
+    }
+    store[idx] = next;
+    return res.status(200).json({ ok: true, data: next });
   }
 
   if (method === "DELETE") {
