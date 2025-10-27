@@ -18,7 +18,7 @@ export default function Home() {
         </a>
       </section>
 
-      {/* How it works section */}
+      {/* How it works */}
       <section className="py-20 bg-white w-full">
         <div className="max-w-5xl mx-auto px-6">
           <h2 className="text-3xl font-bold text-gray-900 mb-10">
@@ -26,27 +26,40 @@ export default function Home() {
           </h2>
 
           <div className="grid sm:grid-cols-3 gap-8 text-gray-700">
-            {/* Step 1 */}
             <div className="p-6 rounded-2xl shadow-sm border hover:shadow-md transition bg-pink-50">
               <div className="text-4xl mb-3">📱</div>
               <h3 className="text-xl font-semibold mb-2">Scan QR</h3>
               <p>Find en HunVælger QR-kode i byen, på events eller online – og kom direkte til profilen.</p>
             </div>
 
-            {/* Step 2 */}
             <div className="p-6 rounded-2xl shadow-sm border hover:shadow-md transition bg-pink-50">
               <div className="text-4xl mb-3">💁‍♀️</div>
               <h3 className="text-xl font-semibold mb-2">Se profil</h3>
               <p>Læs om personen, interesser og se billeder – alt præsenteret på en enkel og ærlig måde.</p>
             </div>
 
-            {/* Step 3 */}
             <div className="p-6 rounded-2xl shadow-sm border hover:shadow-md transition bg-pink-50">
               <div className="text-4xl mb-3">💬</div>
               <h3 className="text-xl font-semibold mb-2">Connect</h3>
               <p>Del QR’en, skriv sammen og se hvor kemien fører jer hen 💖</p>
             </div>
           </div>
+        </div>
+      </section>
+
+      {/* About / Vision section */}
+      <section className="py-20 bg-gradient-to-b from-white to-pink-50 w-full">
+        <div className="max-w-3xl mx-auto px-6">
+          <h2 className="text-3xl font-bold text-gray-900 mb-6">Om HunVælger</h2>
+          <p className="text-gray-700 leading-relaxed text-lg">
+            HunVælger er skabt som et moderne, ærligt og legende datingkoncept — hvor kvinden tager initiativet,
+            og mødet starter med et smil. Platformen forener den digitale verden med ægte menneskelig kemi,
+            og gør det nemt at opdage nye forbindelser gennem QR-koder, events og personlighed.
+          </p>
+          <p className="text-gray-700 leading-relaxed text-lg mt-4">
+            Vores mission er enkel: at skabe en platform, hvor respekt, nysgerrighed og ligeværd er centrum —
+            og hvor det aldrig har været sjovere at sige “hej”.
+          </p>
         </div>
       </section>
 
