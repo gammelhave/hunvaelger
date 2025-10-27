@@ -1,0 +1,11 @@
+<svg width="120" height="120" viewBox="0 0 120 120" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="HunVælger">
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#ec4899"/>
+      <stop offset="1" stop-color="#3b82f6"/>
+    </linearGradient>
+  </defs>
+  <rect x="10" y="10" width="100" height="100" rx="26" fill="url(#g)"/>
+  <path d="M35 40 h8 v16 h14 V40 h8 v40h-8 V64 H43 v16 h-8z" fill="white"/>
+  <path d="M70 40 h9 l11 40 h-8 l-7-27 -7 27 h-8z" fill="white" opacity="0.92"/>
+</svg>
