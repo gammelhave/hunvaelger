@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="420" height="84" viewBox="0 0 420 84" role="img" aria-label="HunVælger">
+  <defs>
+    <linearGradient id="grad" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#F9A8D4"/>
+      <stop offset="1" stop-color="#EC4899"/>
+    </linearGradient>
+  </defs>
+  <!-- Hjerte-ikon -->
+  <path d="M36 62c-7-7-19-13-19-23a10 10 0 0 1 19-6 10 10 0 0 1 19 6c0 10-12 16-19 23z" fill="url(#grad)"/>
+  <!-- Wordmark -->
+  <text x="64" y="56" font-family="system-ui, -apple-system, Segoe UI, Roboto, 'Plus Jakarta Sans', sans-serif"
+        font-size="38" font-weight="800" fill="#0f172a" letter-spacing="0.5">
+    Hun<tspan fill="#111827">Vælger</tspan>
+  </text>
