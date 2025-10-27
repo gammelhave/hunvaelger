@@ -1,27 +1,7 @@
-import "./globals.css";
-import { Plus_Jakarta_Sans } from "next/font/google";
-
-export const metadata = { /* ... som før ... */ };
-
-const jakarta = Plus_Jakarta_Sans({
-  subsets: ["latin"],
-  variable: "--font-jakarta",
-  display: "swap",
-});
-
-export default function RootLayout({ children }) {
-  return (
-    <html lang="da">
-      <body className={`${jakarta.variable} font-sans min-h-screen bg-white text-gray-900`}>
-        {children}
-      </body>
-    </html>
-  );
-}
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-/* små forbedringer */
+/* small tweaks */
 html, body { height: 100%; }
 :root { color-scheme: light; }
