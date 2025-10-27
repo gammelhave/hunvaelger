@@ -1,3 +1,5 @@
+import { Plus_Jakarta_Sans } from "next/font/google";
+
 export const metadata = {
   title: "HunVælger",
   description:
@@ -23,10 +25,16 @@ export const metadata = {
   },
 };
 
+const jakarta = Plus_Jakarta_Sans({
+  subsets: ["latin"],
+  variable: "--font-jakarta",
+  display: "swap",
+});
+
 export default function RootLayout({ children }) {
   return (
     <html lang="da">
-      <body className="min-h-screen bg-white text-gray-900">
+      <body className={`${jakarta.variable} font-sans min-h-screen bg-white text-gray-900`}>
         {children}
       </body>
     </html>
