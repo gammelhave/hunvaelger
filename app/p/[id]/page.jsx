@@ -1,23 +1,5 @@
 import { headers } from "next/headers";
-
-export const dynamic = "force-dynamic";
-
-async function fetchProfile(id) {
-  const h = headers();
-  const proto = h.get("x-forwarded-proto") ?? "https";
-  const host = h.get("x-forwarded-host") ?? h.get("host");
-  const origin =
-    process.env.NEXT_PUBLIC_BASE_URL || (host ? `${proto}://${host}` : "");
-
-  const res = await fetch(
-    `${origin}/api/profiles?id=${encodeURIComponent(id)}`,
-    { cache: "no-store" }
-  );
-  if (!res.ok) return { profile: null, origin };
-  const json = await res.json();
-  return { profile: json?.ok ? json.data : null, origin };
-}
-import { headers } from "next/headers";
+import Image from "next/image";
 
 export const dynamic = "force-dynamic";
 
@@ -27,7 +9,10 @@ async function fetchProfileWithOrigin(id) {
   const host = h.get("x-forwarded-host") ?? h.get("host");
   const origin =
     process.env.NEXT_PUBLIC_BASE_URL || (host ? `${proto}://${host}` : "");
-  const res = await fetch(`${origin}/api/profiles?id=${encodeURIComponent(id)}`, { cache: "no-store" });
+  const res = await fetch(
+    `${origin}/api/profiles?id=${encodeURIComponent(id)}`,
+    { cache: "no-store" }
+  );
   if (!res.ok) return { p: null, origin };
   const json = await res.json();
   return { p: json?.ok ? json.data : null, origin };
@@ -38,31 +23,22 @@ export async function generateMetadata({ params }) {
   if (!p) return { title: "Profil ikke fundet" };
 
   const title = `HunVælger – ${p.name}`;
-  const description = `${p.name}, ${p.age} • ${p.city}${p.bio ? " — " + p.bio : ""}`;
+  const description = `${p.name}, ${p.age} • ${p.city}${
+    p.bio ? " — " + p.bio : ""
+  }`;
   const image = p.photo || "/og-preview.jpg";
   const url = `${origin}/p/${p.id}`;
 
   return {
     title,
     description,
-    openGraph: {
-      title,
-      description,
-      url,
-      images: [image],
-      type: "profile"
-    },
-    twitter: {
-      card: "summary_large_image",
-      title,
-      description,
-      images: [image]
-    }
+    openGraph: { title, description, url, images: [image], type: "profile" },
+    twitter: { card: "summary_large_image", title, description, images: [image] },
   };
 }
 
 export default async function ProfileDetail({ params }) {
-  const { profile: p, origin } = await fetchProfile(params.id);
+  const { p, origin } = await fetchProfileWithOrigin(params.id);
 
   if (!p) {
     return (
@@ -75,7 +51,7 @@ export default async function ProfileDetail({ params }) {
     );
   }
 
-  // Forbered data til share-script (sikkert serialiseret)
+  // Data til deling (bruges i inline script)
   const sharePayload = {
     title: `HunVælger – ${p.name}`,
     text: `${p.name}, ${p.age} • ${p.city}\n${p.bio || ""}`,
@@ -91,12 +67,14 @@ export default async function ProfileDetail({ params }) {
       <div className="rounded-2xl border p-4">
         <div className="flex flex-col gap-6 sm:flex-row">
           <div className="sm:w-1/3">
-            <div className="aspect-[3/4] overflow-hidden rounded-xl bg-gray-100 flex items-center justify-center">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
+            <div className="overflow-hidden rounded-xl bg-gray-100">
+              <Image
                 src={p.photo || "/avatars/placeholder.jpg"}
                 alt={p.name}
-                className="h-full w-full object-cover"
+                width={600}
+                height={800}
+                className="w-full h-auto object-cover"
+                priority
               />
             </div>
           </div>
@@ -110,15 +88,14 @@ export default async function ProfileDetail({ params }) {
 
             <div className="mt-4 flex flex-wrap gap-2">
               {(p.interests || []).map((t) => (
-                <span
-                  key={t}
-                  className="rounded-full border px-3 py-1 text-sm"
-                >
+                <span key={t} className="rounded-full border px-3 py-1 text-sm">
                   {t}
                 </span>
               ))}
               {(!p.interests || p.interests.length === 0) && (
-                <span className="text-sm opacity-70">Ingen interesser angivet</span>
+                <span className="text-sm opacity-70">
+                  Ingen interesser angivet
+                </span>
               )}
             </div>
 
@@ -130,7 +107,6 @@ export default async function ProfileDetail({ params }) {
                 Print QR til {p.name}
               </a>
 
-              {/* Knappen får funktionalitet via script længere nede */}
               <button
                 id="share-btn"
                 type="button"
@@ -143,7 +119,7 @@ export default async function ProfileDetail({ params }) {
         </div>
       </div>
 
-      {/* Inline script der håndterer deling / kopiering uden "use client" */}
+      {/* Inline script til deling/kopiering – fungerer uden "use client" */}
       <script
         dangerouslySetInnerHTML={{
           __html: `
