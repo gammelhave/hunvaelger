@@ -2,22 +2,17 @@ export const metadata = {
   title: "HunVælger",
   description:
     "Scan. Se. Connect. HunVælger – et simpelt, moderne koncept til at mødes og matche.",
+  metadataBase:
+    typeof process !== "undefined" && process.env.NEXT_PUBLIC_BASE_URL
+      ? new URL(process.env.NEXT_PUBLIC_BASE_URL)
+      : undefined,
   openGraph: {
     title: "HunVælger – Scan. Se. Connect.",
     description:
       "Se profiler, scan QR-koder og connect på et øjeblik. Et moderne dansk dating-koncept.",
-    url: "https://hunvaelger.vercel.app/",
-    siteName: "HunVælger",
-    images: [
-      {
-        url: "/og-preview.jpg",
-        width: 1200,
-        height: 630,
-        alt: "HunVælger forside-preview",
-      },
-    ],
-    locale: "da_DK",
+    images: ["/og-preview.jpg"],
     type: "website",
+    locale: "da_DK",
   },
   twitter: {
     card: "summary_large_image",
@@ -27,3 +22,13 @@ export const metadata = {
     images: ["/og-preview.jpg"],
   },
 };
+
+export default function RootLayout({ children }) {
+  return (
+    <html lang="da">
+      <body className="min-h-screen bg-white text-gray-900">
+        {children}
+      </body>
+    </html>
+  );
+}
