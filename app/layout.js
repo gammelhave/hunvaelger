@@ -1,3 +1,4 @@
+import "./globals.css"; // 👈 DEN HER LINJE ER DEN VIGTIGE!
 import { Plus_Jakarta_Sans } from "next/font/google";
 
 export const metadata = {
@@ -34,7 +35,9 @@ const jakarta = Plus_Jakarta_Sans({
 export default function RootLayout({ children }) {
   return (
     <html lang="da">
-      <body className={`${jakarta.variable} font-sans min-h-screen bg-white text-gray-900`}>
+      <body
+        className={`${jakarta.variable} font-sans min-h-screen bg-white text-gray-900`}
+      >
         {children}
       </body>
     </html>
