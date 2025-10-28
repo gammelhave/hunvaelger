@@ -1,9 +1,5 @@
 "use client"
 
-export const metadata = {
-  title: "Kontakt",
-  description: "Kontakt HunVælger – vi svarer gerne på spørgsmål og forslag.",
-}
 export default function ContactPage() {
   return (
     <section className="container mx-auto px-4 py-16 max-w-3xl">
