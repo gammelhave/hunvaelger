@@ -1,3 +1,5 @@
+"use client"
+
 export const metadata = {
   title: "Kontakt",
   description: "Kontakt HunVælger – vi svarer gerne på spørgsmål og forslag.",
@@ -15,23 +17,8 @@ export default function ContactPage() {
       </p>
 
       <div className="rounded-2xl border bg-white p-6">
-        <div className="space-y-2 text-gray-800">
-          <p>
-            Email:{" "}
-            <a
-              href="mailto:kontakt@hunvaelger.dk"
-              className="text-pink-600 underline hover:no-underline"
-            >
-              kontakt@hunvaelger.dk
-            </a>
-          </p>
-          <p>
-            Facebook/Instagram: <span className="text-gray-600">(@hunvaelger)</span>
-          </p>
-        </div>
-
         <form
-          className="mt-6 grid gap-4"
+          className="grid gap-4"
           onSubmit={(e) => {
             e.preventDefault()
             alert("Tak for din besked! Vi vender tilbage hurtigst muligt.")
