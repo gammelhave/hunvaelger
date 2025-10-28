@@ -1,3 +1,7 @@
+<<<<<<< HEAD
+=======
+
+>>>>>>> 447f1d7 (Add TypeScript config and dev deps)
 {
   "compilerOptions": {
     "baseUrl": ".",
