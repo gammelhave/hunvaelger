@@ -1,36 +1,33 @@
 // app/api/profiles/route.ts
 import { NextResponse } from "next/server"
+import { readProfiles, addProfile } from "@/lib/db"
 
-type Profile = {
-  id: string
-  name: string
-  age?: number
-  bio?: string
-}
-
-// Simpel in-memory “DB” (nulstilles ved redeploy)
-const DB: Profile[] = [
-  { id: "1", name: "Mads", age: 29, bio: "Kaffe, kajak og koncertfreak." },
-  { id: "2", name: "Jonas", age: 34, bio: "Surdej, trail-løb og filmnørd." },
-]
+export const dynamic = "force-dynamic" // undgå caching af API på build-time
 
 export async function GET() {
-  return NextResponse.json({ ok: true, profiles: DB })
+  const profiles = await readProfiles()
+  return NextResponse.json({ ok: true, profiles })
 }
 
 export async function POST(req: Request) {
-  const data = await req.json().catch(() => ({}))
-  const name = typeof data.name === "string" ? data.name.trim() : ""
-  const age = data.age ? Number(data.age) : undefined
-  const bio = typeof data.bio === "string" ? data.bio.trim() : ""
+  try {
+    const data = await req.json().catch(() => ({}))
+    const name = typeof data.name === "string" ? data.name.trim() : ""
+    const age = data.age ? Number(data.age) : undefined
+    const bio = typeof data.bio === "string" ? data.bio.trim() : ""
 
-  if (!name) {
-    return NextResponse.json({ ok: false, error: "Navn er påkrævet." }, { status: 400 })
+    if (!name) {
+      return NextResponse.json({ ok: false, error: "Navn er påkrævet." }, { status: 400 })
+    }
+
+    const profile = await addProfile({
+      name,
+      age: Number.isFinite(age) ? age : undefined,
+      bio,
+    })
+
+    return NextResponse.json({ ok: true, profile }, { status: 201 })
+  } catch (e) {
+    return NextResponse.json({ ok: false, error: "Serverfejl" }, { status: 500 })
   }
-
-  const id = String(Date.now())
-  const profile: Profile = { id, name, age: Number.isFinite(age) ? age : undefined, bio }
-  DB.push(profile)
-
-  return NextResponse.json({ ok: true, profile }, { status: 201 })
 }
