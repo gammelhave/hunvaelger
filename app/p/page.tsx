@@ -1,20 +1,25 @@
 // app/p/page.tsx
-// Server Component
+import { headers } from "next/headers"
+
 export const dynamic = "force-dynamic" // ingen build-time caching
 
 type Profile = { id: string; name: string; age?: number; bio?: string }
 
 async function fetchProfiles(): Promise<Profile[]> {
-  // Primært forsøg: absolut URL hvis sat
-  const base = process.env.NEXT_PUBLIC_SITE_URL
+  // Byg en sikker base-URL ud fra request headers
+  const h = headers()
+  const host =
+    h.get("x-forwarded-host") ?? h.get("host") ?? process.env.NEXT_PUBLIC_SITE_URL ?? "localhost:3000"
+  const proto = h.get("x-forwarded-proto") ?? (process.env.VERCEL ? "https" : "http")
+  const base = host.startsWith("http") ? host : `${proto}://${host}`
+
   try {
-    const url = base ? `${base}/api/profiles` : "/api/profiles"
-    const res = await fetch(url, { cache: "no-store" })
+    const res = await fetch(`${base}/api/profiles`, { cache: "no-store" })
     if (!res.ok) throw new Error("Bad response")
     const data = await res.json()
     return data?.profiles ?? []
   } catch {
-    // Fallback til relativ fetch ved SSR/runtime
+    // sidste fallback – relativ (kan virke lokalt)
     const res2 = await fetch("/api/profiles", { cache: "no-store" }).catch(() => null)
     if (!res2 || !res2.ok) return []
     const data2 = await res2.json().catch(() => ({}))
