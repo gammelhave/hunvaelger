@@ -4,13 +4,8 @@ export const dynamic = "force-dynamic"
 type Profile = { id: string; name: string; age?: number; bio?: string }
 
 async function fetchProfiles(): Promise<Profile[]> {
+  const base = "https://hunvaelger-7oo5wdx6v-anders-lyngholms-projects.vercel.app"
   try {
-    const base =
-      process.env.NEXT_PUBLIC_SITE_URL ||
-      process.env.VERCEL_URL
-        ? `https://${process.env.VERCEL_URL}`
-        : "http://localhost:3000"
-
     const res = await fetch(`${base}/api/profiles`, { cache: "no-store" })
     if (!res.ok) throw new Error("Bad response")
     const data = await res.json()
