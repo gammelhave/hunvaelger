@@ -1,15 +1,17 @@
 import { NextResponse } from "next/server"
 import type { NextRequest } from "next/server"
 
-const PROTECT_PREFIXES = ["/admin", "/api/profiles/clear", "/api/profiles/"]
-
 export function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl
-  if (!PROTECT_PREFIXES.some((p) => pathname.startsWith(p))) return NextResponse.next()
+
+  // Beskyt /admin og alle admin-/profiles-operationer
+  const protect = ["/admin", "/api/profiles/clear", "/api/profiles/", "/api/admin/"]
+    .some((p) => pathname.startsWith(p))
+  if (!protect) return NextResponse.next()
 
   const user = process.env.ADMIN_USER
   const pass = process.env.ADMIN_PASS
-  if (!user || !pass) return NextResponse.next() // hvis ikke sat, giv adgang
+  if (!user || !pass) return NextResponse.next()
 
   const auth = req.headers.get("authorization") || ""
   const [scheme, encoded] = auth.split(" ")
@@ -29,6 +31,7 @@ function unauthorized() {
   })
 }
 
+// Matcher nu også /api/admin/*
 export const config = {
-  matcher: ["/admin/:path*", "/api/profiles/:path*"],
+  matcher: ["/admin/:path*", "/api/profiles/:path*", "/api/admin/:path*"],
 }
