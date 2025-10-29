@@ -13,17 +13,26 @@ export default function AdminPage() {
   const [edit, setEdit] = useState<{ name: string; age: string; bio: string }>({ name: "", age: "", bio: "" })
   const [clearing, setClearing] = useState(false)
 
-  async function load() {
+  // søgning/paginering
+  const [q, setQ] = useState("")
+  const [page, setPage] = useState(1)
+  const [limit] = useState(10)
+  const [total, setTotal] = useState(0)
+  const pages = Math.max(1, Math.ceil(total / limit))
+
+  async function fetchList(opts?: { q?: string; page?: number }) {
+    const q2 = (opts?.q ?? q).trim()
+    const p2 = opts?.page ?? page
     setLoading(true)
     setError(null)
     try {
-      // Admin må gerne se alle, så vi laver et internt admin-endpoint
-      // Brug det offentlige + incl=all via query? For simpelt laver vi fetch fra admin-API, men GET /api/profiles viser kun aktive.
-      const res = await fetch("/api/profiles", { cache: "no-store" })
+      const params = new URLSearchParams({ q: q2, page: String(p2), limit: String(limit) })
+      const res = await fetch(`/api/admin/list?${params.toString()}`, { cache: "no-store" })
+      if (!res.ok) throw new Error()
       const data = await res.json()
-      // data.profiles er kun aktive – hent de inaktive via et lille hack:
-      // For simpelt demo holder vi os til aktive + cache over admin actions:
-      setList(data?.profiles ?? [])
+      setList(data.items ?? [])
+      setTotal(data.total ?? 0)
+      setPage(data.page ?? 1)
     } catch {
       setError("Kunne ikke hente profiler.")
     } finally {
@@ -31,20 +40,8 @@ export default function AdminPage() {
     }
   }
 
-  // Simpel admin-list: vi supplerer med at hente inaktive via en lille side-load
   useEffect(() => {
-    load()
-    ;(async () => {
-      // Hent ALLE fra et særligt admin-kald (midlertidigt: vi kalder PATCH uden body for at få alle? Nej.)
-      // For at holde koden ren, laver vi i stedet en lille client-side fallback:
-      const res = await fetch("/api/profiles?all=1", { cache: "no-store" }).catch(() => null)
-      if (res && res.ok) {
-        const data = await res.json().catch(() => ({}))
-        if (data && Array.isArray(data.profilesAll)) {
-          setList(data.profilesAll)
-        }
-      }
-    })()
+    fetchList()
   }, [])
 
   function startEdit(p: Profile) {
@@ -63,9 +60,8 @@ export default function AdminPage() {
       const { profile } = await res.json()
       setList((prev) => prev.map((p) => (p.id === id ? profile : p)))
       setEditingId(null)
-    } catch {
-      setError("Kunne ikke gemme ændringer.")
-    } finally { setBusyId(null) }
+    } catch { setError("Kunne ikke gemme ændringer.") }
+    finally { setBusyId(null) }
   }
 
   async function softRemove(id: string) {
@@ -97,6 +93,7 @@ export default function AdminPage() {
       const res = await fetch(`/api/profiles/${id}?hard=1`, { method: "DELETE" })
       if (!res.ok) throw new Error()
       setList((prev) => prev.filter((p) => p.id !== id))
+      setTotal((t) => Math.max(0, t - 1))
     } catch { setError("Kunne ikke slette permanent.") }
     finally { setBusyId(null) }
   }
@@ -107,10 +104,11 @@ export default function AdminPage() {
     try {
       const res = await fetch("/api/profiles/clear", { method: "POST" })
       if (!res.ok) throw new Error()
-      setList([])
+      setList([]); setTotal(0); setPage(1)
     } catch { setError("Kunne ikke slette alle profiler.") }
     finally { setClearing(false) }
   }
+
   return (
     <section className="container mx-auto px-4 py-16">
       <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
@@ -131,7 +129,6 @@ export default function AdminPage() {
           >
             Eksportér JSON
           </button>
-
           <button
             onClick={removeAll}
             disabled={clearing || list.length === 0}
@@ -142,7 +139,47 @@ export default function AdminPage() {
           </button>
         </div>
       </div>
- 
+
+      {/* Søgning */}
+      <form
+        onSubmit={(e) => {
+          e.preventDefault()
+          fetchList({ q, page: 1 })
+        }}
+        className="mb-4 flex gap-2"
+      >
+        <input
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          placeholder="Søg navn eller bio…"
+          className="w-full rounded-lg border px-3 py-2"
+        />
+        <button className="rounded-lg bg-pink-500 text-white px-4 py-2">Søg</button>
+      </form>
+
+      {/* Pager top */}
+      <div className="mb-3 flex items-center justify-between text-sm text-gray-600">
+        <span>
+          {total} profil{total === 1 ? "" : "er"} • side {page} af {Math.max(1, pages)}
+        </span>
+        <div className="flex gap-2">
+          <button
+            onClick={() => fetchList({ page: Math.max(1, page - 1) })}
+            disabled={page <= 1}
+            className="rounded-lg border px-3 py-1 disabled:opacity-40"
+          >
+            ← Forrige
+          </button>
+          <button
+            onClick={() => fetchList({ page: Math.min(pages, page + 1) })}
+            disabled={page >= pages}
+            className="rounded-lg border px-3 py-1 disabled:opacity-40"
+          >
+            Næste →
+          </button>
+        </div>
+      </div>
+
       {error && <p className="text-red-600 mb-4">{error}</p>}
 
       {loading ? (
@@ -233,6 +270,29 @@ export default function AdminPage() {
           })}
         </ul>
       )}
+
+      {/* Pager bund */}
+      <div className="mt-6 flex items-center justify-between text-sm text-gray-600">
+        <span>
+          {total} profil{total === 1 ? "" : "er"} • side {page} af {Math.max(1, pages)}
+        </span>
+        <div className="flex gap-2">
+          <button
+            onClick={() => fetchList({ page: Math.max(1, page - 1) })}
+            disabled={page <= 1}
+            className="rounded-lg border px-3 py-1 disabled:opacity-40"
+          >
+            ← Forrige
+          </button>
+          <button
+            onClick={() => fetchList({ page: Math.min(pages, page + 1) })}
+            disabled={page >= pages}
+            className="rounded-lg border px-3 py-1 disabled:opacity-40"
+          >
+            Næste →
+          </button>
+        </div>
+      </div>
     </section>
   )
 }
