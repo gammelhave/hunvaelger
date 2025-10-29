@@ -4,7 +4,8 @@ import { readProfiles, addProfile } from "@/lib/db-kv"
 export const dynamic = "force-dynamic"
 
 export async function GET() {
-  const profiles = await readProfiles()
+  const all = await readProfiles()
+  const profiles = all.filter((p) => p.active !== false) // kun aktive
   return NextResponse.json({ ok: true, profiles })
 }
 
@@ -14,6 +15,11 @@ export async function POST(req: Request) {
   const age = data.age ? Number(data.age) : undefined
   const bio = typeof data.bio === "string" ? data.bio.trim() : ""
   if (!name) return NextResponse.json({ ok: false, error: "Navn er påkrævet." }, { status: 400 })
-  const profile = await addProfile({ name, age: Number.isFinite(age) ? age : undefined, bio })
+
+  const profile = await addProfile({
+    name,
+    age: Number.isFinite(age) ? age : undefined,
+    bio,
+  })
   return NextResponse.json({ ok: true, profile }, { status: 201 })
 }
