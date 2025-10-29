@@ -1,30 +1,23 @@
 import { NextResponse } from "next/server"
 import type { NextRequest } from "next/server"
 
-const PROTECT_PREFIX = "/admin"
+const PROTECT_PREFIXES = ["/admin", "/api/profiles/clear", "/api/profiles/"]
 
 export function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl
-  if (!pathname.startsWith(PROTECT_PREFIX)) return NextResponse.next()
+  if (!PROTECT_PREFIXES.some((p) => pathname.startsWith(p))) return NextResponse.next()
 
   const user = process.env.ADMIN_USER
   const pass = process.env.ADMIN_PASS
-  if (!user || !pass) {
-    // hvis ikke sat, giv adgang (eller returner 500)
-    return NextResponse.next()
-  }
+  if (!user || !pass) return NextResponse.next() // hvis ikke sat, giv adgang
 
   const auth = req.headers.get("authorization") || ""
   const [scheme, encoded] = auth.split(" ")
-  if (scheme !== "Basic" || !encoded) {
-    return unauthorized()
-  }
+  if (scheme !== "Basic" || !encoded) return unauthorized()
 
   const decoded = Buffer.from(encoded, "base64").toString()
   const [u, p] = decoded.split(":")
-  if (u === user && p === pass) {
-    return NextResponse.next()
-  }
+  if (u === user && p === pass) return NextResponse.next()
 
   return unauthorized()
 }
@@ -37,5 +30,5 @@ function unauthorized() {
 }
 
 export const config = {
-  matcher: ["/admin/:path*"],
+  matcher: ["/admin/:path*", "/api/profiles/:path*"],
 }
