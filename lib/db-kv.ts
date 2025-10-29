@@ -22,4 +22,15 @@ export async function addProfile(input: Omit<Profile, "id">) {
   const updated = [...current, newProfile]
   await kv.set(KEY, updated)
   return newProfile
+  }
+export async function deleteProfile(id: string) {
+  const list = await readProfiles()
+  const updated = list.filter((p) => p.id !== id)
+  await kv.set(KEY, updated)
+  return { ok: true }
+}
+
+export async function clearProfiles() {
+  await kv.set(KEY, [])
+  return { ok: true }
 }
