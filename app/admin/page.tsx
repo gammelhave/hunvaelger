@@ -1,453 +1,305 @@
-"use client"
+"use client";
 
-import { useEffect, useState } from "react"
+import { useEffect, useMemo, useState } from "react";
 
 type Profile = {
-  id: string
-  name: string
-  age?: number
-  bio?: string
-  active?: boolean
-  deletedAt?: number | null
-}
+  id: string;
+  name: string;
+  age?: number;
+  bio?: string;
+  active?: boolean;
+  photos?: string[]; // <= nye billed-URL’er
+};
 
 export default function AdminPage() {
-  // data & ui state
-  const [list, setList] = useState<Profile[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-  const [busyId, setBusyId] = useState<string | null>(null)
-  const [clearing, setClearing] = useState(false)
+  const [profiles, setProfiles] = useState<Profile[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
 
-  // edit state
-  const [editingId, setEditingId] = useState<string | null>(null)
-  const [edit, setEdit] = useState<{ name: string; age: string; bio: string }>({
-    name: "",
-    age: "",
-    bio: "",
-  })
+  // form state
+  const [name, setName] = useState("");
+  const [age, setAge] = useState<number | "">("");
+  const [bio, setBio] = useState("");
+  const [files, setFiles] = useState<File[]>([]);
+  const [previewUrls, setPreviewUrls] = useState<string[]>([]);
+  const [error, setError] = useState<string | null>(null);
+  const [okMsg, setOkMsg] = useState<string | null>(null);
 
-  // filters & pagination
-  const [q, setQ] = useState("")
-  const [minAge, setMinAge] = useState("")
-  const [maxAge, setMaxAge] = useState("")
-  const [sort, setSort] = useState<"newest" | "oldest" | "name">("newest")
-
-  const [page, setPage] = useState(1)
-  const [limit] = useState(10)
-  const [total, setTotal] = useState(0)
-  const pages = Math.max(1, Math.ceil(total / limit))
-
-  // ------- helpers -------
-  async function fetchList(opts?: {
-    q?: string
-    page?: number
-    minAge?: string
-    maxAge?: string
-    sort?: string
-  }) {
-    const q2 = (opts?.q ?? q).trim()
-    const p2 = opts?.page ?? page
-    const min2 = (opts?.minAge ?? minAge).trim()
-    const max2 = (opts?.maxAge ?? maxAge).trim()
-    const sort2 = (opts?.sort ?? sort)
-
-    setLoading(true)
-    setError(null)
+  // hent seneste profiler
+  async function load() {
+    setLoading(true);
+    setError(null);
     try {
-      const params = new URLSearchParams({
-        q: q2,
-        page: String(p2),
-        limit: String(limit),
-        sort: sort2,
-      })
-      if (min2) params.set("minAge", min2)
-      if (max2) params.set("maxAge", max2)
-
-      const res = await fetch(`/api/admin/list?${params.toString()}`, {
-        cache: "no-store",
-      })
-      if (!res.ok) throw new Error()
-      const data = await res.json()
-      setList(data.items ?? [])
-      setTotal(data.total ?? 0)
-      setPage(data.page ?? 1)
-    } catch {
-      setError("Kunne ikke hente profiler.")
+      const res = await fetch("/api/profiles", { cache: "no-store" });
+      if (!res.ok) throw new Error(await res.text());
+      const data = await res.json();
+      setProfiles(Array.isArray(data?.profiles) ? data.profiles : []);
+    } catch (e: any) {
+      setError(e?.message ?? "Kunne ikke hente profiler");
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
   }
 
   useEffect(() => {
-    fetchList()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+    load();
+  }, []);
 
-  function startEdit(p: Profile) {
-    setEditingId(p.id)
-    setEdit({
-      name: p.name ?? "",
-      age: p.age ? String(p.age) : "",
-      bio: p.bio ?? "",
-    })
-  }
-  function cancelEdit() {
-    setEditingId(null)
+  // håndter valg af max 3 billeder
+  function onPickFiles(e: React.ChangeEvent<HTMLInputElement>) {
+    const list = Array.from(e.target.files ?? []);
+    const next = [...files, ...list].slice(0, 3);
+    setFiles(next);
+
+    // previews
+    const urls = next.map((f) => URL.createObjectURL(f));
+    setPreviewUrls(urls);
   }
 
-  async function saveEdit(id: string) {
-    setBusyId(id)
-    setError(null)
+  function removeFile(idx: number) {
+    const next = files.filter((_, i) => i !== idx);
+    setFiles(next);
+    setPreviewUrls(next.map((f) => URL.createObjectURL(f)));
+  }
+
+  const canSubmit = useMemo(() => {
+    if (!name.trim()) return false;
+    if (age !== "" && (Number.isNaN(Number(age)) || Number(age) <= 0)) return false;
+    if (files.length > 3) return false;
+    return true;
+  }, [name, age, files.length]);
+
+  async function handleCreate(e: React.FormEvent) {
+    e.preventDefault();
+    if (!canSubmit) return;
+
+    setSubmitting(true);
+    setError(null);
+    setOkMsg(null);
+
     try {
-      const payload: any = {
-        name: edit.name.trim(),
-        bio: edit.bio.trim(),
+      // 1) upload billeder (0–3) til Blob og få URLs
+      let uploadedUrls: string[] = [];
+      if (files.length > 0) {
+        const fd = new FormData();
+        files.forEach((f) => fd.append("files", f));
+        const up = await fetch("/api/upload", { method: "POST", body: fd });
+        if (!up.ok) throw new Error(await up.text());
+        const { urls } = await up.json();
+        uploadedUrls = urls ?? [];
       }
-      if (edit.age.trim() !== "") payload.age = Number(edit.age)
 
-      const res = await fetch(`/api/profiles/${id}`, {
-        method: "PATCH",
+      // 2) POST profilen til din eksisterende /api/profiles
+      const res = await fetch("/api/profiles", {
+        method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      })
-      if (!res.ok) throw new Error()
-      const { profile } = await res.json()
-      setList((prev) => prev.map((p) => (p.id === id ? profile : p)))
-      setEditingId(null)
-    } catch {
-      setError("Kunne ikke gemme ændringer.")
+        body: JSON.stringify({
+          name: name.trim(),
+          age: age === "" ? undefined : Number(age),
+          bio: bio.trim() || undefined,
+          photos: uploadedUrls, // <= gem disse URLs
+          active: true,
+        }),
+      });
+      if (!res.ok) throw new Error(await res.text());
+
+      setOkMsg("Profil oprettet ✔");
+      setName("");
+      setAge("");
+      setBio("");
+      setFiles([]);
+      setPreviewUrls([]);
+      await load();
+    } catch (e: any) {
+      setError(e?.message ?? "Kunne ikke oprette profil");
     } finally {
-      setBusyId(null)
+      setSubmitting(false);
     }
   }
 
-  async function softRemove(id: string) {
-    if (!confirm("Deaktivér (soft delete) denne profil?")) return
-    setBusyId(id)
-    setError(null)
+  async function handleDelete(id: string) {
+    if (!confirm("Slet profilen?")) return;
+    setError(null);
     try {
-      const res = await fetch(`/api/profiles/${id}`, { method: "DELETE" })
-      if (!res.ok) throw new Error()
-      setList((prev) =>
-        prev.map((p) =>
-          p.id === id ? { ...p, active: false, deletedAt: Date.now() } : p
-        )
-      )
-    } catch {
-      setError("Kunne ikke deaktivere profilen.")
-    } finally {
-      setBusyId(null)
-    }
-  }
-
-  async function restore(id: string) {
-    setBusyId(id)
-    setError(null)
-    try {
-      const res = await fetch(`/api/profiles/${id}`, { method: "POST" })
-      if (!res.ok) throw new Error()
-      const { profile } = await res.json()
-      setList((prev) => prev.map((p) => (p.id === id ? profile : p)))
-    } catch {
-      setError("Kunne ikke gendanne profilen.")
-    } finally {
-      setBusyId(null)
-    }
-  }
-
-  async function hardRemove(id: string) {
-    if (!confirm("SLET PERMANENT? Dette kan ikke fortrydes.")) return
-    setBusyId(id)
-    setError(null)
-    try {
-      const res = await fetch(`/api/profiles/${id}?hard=1`, { method: "DELETE" })
-      if (!res.ok) throw new Error()
-      setList((prev) => prev.filter((p) => p.id !== id))
-      setTotal((t) => Math.max(0, t - 1))
-    } catch {
-      setError("Kunne ikke slette permanent.")
-    } finally {
-      setBusyId(null)
-    }
-  }
-
-  async function removeAll() {
-    if (!confirm("Slet ALLE profiler permanent?")) return
-    setClearing(true)
-    setError(null)
-    try {
-      const res = await fetch("/api/profiles/clear", { method: "POST" })
-      if (!res.ok) throw new Error()
-      setList([])
-      setTotal(0)
-      setPage(1)
-    } catch {
-      setError("Kunne ikke slette alle profiler.")
-    } finally {
-      setClearing(false)
+      const res = await fetch(`/api/profiles?id=${encodeURIComponent(id)}`, {
+        method: "DELETE",
+      });
+      if (!res.ok) throw new Error(await res.text());
+      await load();
+    } catch (e: any) {
+      setError(e?.message ?? "Kunne ikke slette profil");
     }
   }
 
   return (
-    <section className="container mx-auto px-4 py-16">
-      {/* Header + actions */}
-      <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
-        <h1 className="text-3xl md:text-4xl font-semibold text-gray-900">
-          Admin – Profiler
-        </h1>
+    <main className="mx-auto max-w-5xl p-6">
+      <h1 className="text-2xl font-bold mb-6">Admin – Profiler</h1>
 
-        <div className="flex gap-2">
+      {/* Opret ny profil */}
+      <form
+        onSubmit={handleCreate}
+        className="mb-10 rounded-2xl border p-5 grid gap-4"
+      >
+        <h2 className="text-lg font-semibold">Opret ny profil</h2>
+
+        {error ? (
+          <div className="rounded-lg border border-red-300 bg-red-50 p-3 text-sm">
+            {error}
+          </div>
+        ) : null}
+        {okMsg ? (
+          <div className="rounded-lg border border-green-300 bg-green-50 p-3 text-sm">
+            {okMsg}
+          </div>
+        ) : null}
+
+        <div className="grid sm:grid-cols-2 gap-4">
+          <div>
+            <label className="block text-sm mb-1">Navn</label>
+            <input
+              className="w-full rounded-xl border px-3 py-2"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="Navn"
+              required
+            />
+          </div>
+          <div>
+            <label className="block text-sm mb-1">Alder</label>
+            <input
+              className="w-full rounded-xl border px-3 py-2"
+              value={age}
+              onChange={(e) => setAge(e.target.value === "" ? "" : Number(e.target.value))}
+              placeholder="fx 40"
+              type="number"
+              min={18}
+            />
+          </div>
+        </div>
+
+        <div>
+          <label className="block text-sm mb-1">Bio</label>
+          <textarea
+            className="w-full rounded-xl border px-3 py-2"
+            rows={5}
+            value={bio}
+            onChange={(e) => setBio(e.target.value)}
+            placeholder="Kort om dig…"
+          />
+        </div>
+
+        <div>
+          <div className="flex items-baseline justify-between">
+            <label className="block text-sm mb-1">Billeder (max 3)</label>
+            <span className="text-xs text-gray-500">{files.length}/3</span>
+          </div>
+          <input
+            type="file"
+            accept="image/*"
+            multiple
+            onChange={onPickFiles}
+            className="block"
+          />
+          {previewUrls.length > 0 ? (
+            <div className="mt-3 grid grid-cols-3 gap-3">
+              {previewUrls.map((url, idx) => (
+                <div key={idx} className="relative">
+                  <img
+                    src={url}
+                    alt={`preview-${idx}`}
+                    className="w-full h-32 object-cover rounded-xl border"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => removeFile(idx)}
+                    className="absolute -top-2 -right-2 rounded-full border bg-white px-2 py-1 text-xs shadow"
+                    title="Fjern"
+                  >
+                    ✕
+                  </button>
+                </div>
+              ))}
+            </div>
+          ) : null}
+          <p className="text-xs text-gray-500 mt-2">
+            Anbefaling: JPG/PNG, &lt; 5 MB pr. fil.
+          </p>
+        </div>
+
+        <div className="flex gap-3">
           <button
-            onClick={() =>
-              (window.location.href = "/api/admin/export?format=csv")
-            }
-            className="rounded-lg border border-gray-300 text-gray-700 px-3 py-2 hover:bg-gray-50"
-            title="Eksportér som CSV"
+            disabled={!canSubmit || submitting}
+            className="rounded-xl bg-pink-500 px-4 py-2 text-white disabled:opacity-50"
           >
-            Eksportér CSV
+            {submitting ? "Opretter…" : "Opret profil"}
           </button>
           <button
-            onClick={() =>
-              (window.location.href = "/api/admin/export?format=json")
-            }
-            className="rounded-lg border border-gray-300 text-gray-700 px-3 py-2 hover:bg-gray-50"
-            title="Eksportér som JSON"
+            type="button"
+            onClick={() => {
+              setName("");
+              setAge("");
+              setBio("");
+              setFiles([]);
+              setPreviewUrls([]);
+              setError(null);
+              setOkMsg(null);
+            }}
+            className="rounded-xl border px-4 py-2"
           >
-            Eksportér JSON
-          </button>
-          <button
-            onClick={removeAll}
-            disabled={clearing || list.length === 0}
-            className="rounded-lg border border-red-300 text-red-600 px-3 py-2 hover:bg-red-50 disabled:opacity-50"
-            title="Slet alle profiler permanent"
-          >
-            {clearing ? "Sletter alle…" : "Tøm alle (permanent)"}
+            Nulstil
           </button>
         </div>
-      </div>
-
-      {/* Filterbar */}
-      <form
-        onSubmit={(e) => {
-          e.preventDefault()
-          fetchList({ q, page: 1, minAge, maxAge, sort })
-        }}
-        className="mb-4 grid gap-2 md:grid-cols-[1fr,120px,120px,160px,auto]"
-      >
-        <input
-          value={q}
-          onChange={(e) => setQ(e.target.value)}
-          placeholder="Søg navn eller bio…"
-          className="rounded-lg border px-3 py-2"
-        />
-        <input
-          value={minAge}
-          onChange={(e) => setMinAge(e.target.value)}
-          placeholder="Min alder"
-          inputMode="numeric"
-          className="rounded-lg border px-3 py-2"
-        />
-        <input
-          value={maxAge}
-          onChange={(e) => setMaxAge(e.target.value)}
-          placeholder="Max alder"
-          inputMode="numeric"
-          className="rounded-lg border px-3 py-2"
-        />
-        <select
-          value={sort}
-          onChange={(e) => setSort(e.target.value as any)}
-          className="rounded-lg border px-3 py-2"
-        >
-          <option value="newest">Nyeste</option>
-          <option value="oldest">Ældste</option>
-          <option value="name">Navn (A→Å)</option>
-        </select>
-        <button className="rounded-lg bg-pink-500 text-white px-4 py-2">
-          Filtrér
-        </button>
       </form>
 
-      {/* Pager top */}
-      <div className="mb-3 flex items-center justify-between text-sm text-gray-600">
-        <span>
-          {total} profil{total === 1 ? "" : "er"} • side {page} af{" "}
-          {Math.max(1, pages)}
-        </span>
-        <div className="flex gap-2">
-          <button
-            onClick={() => fetchList({ page: Math.max(1, page - 1) })}
-            disabled={page <= 1}
-            className="rounded-lg border px-3 py-1 disabled:opacity-40"
-          >
-            ← Forrige
-          </button>
-          <button
-            onClick={() => fetchList({ page: Math.min(pages, page + 1) })}
-            disabled={page >= pages}
-            className="rounded-lg border px-3 py-1 disabled:opacity-40"
-          >
-            Næste →
-          </button>
-        </div>
-      </div>
-
-      {error && <p className="text-red-600 mb-4">{error}</p>}
-
-      {loading ? (
-        <p className="text-gray-600">Indlæser…</p>
-      ) : list.length === 0 ? (
-        <p className="text-gray-600">Ingen profiler.</p>
-      ) : (
-        <ul className="grid gap-4">
-          {list.map((p) => {
-            const isEditing = editingId === p.id
-            const inactive = p.active === false
-            return (
-              <li
-                key={p.id}
-                className={`rounded-2xl border bg-white p-5 ${
-                  inactive ? "opacity-70" : ""
-                }`}
-              >
-                {!isEditing ? (
-                  <div className="flex items-start justify-between gap-4">
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <h3 className="text-lg font-semibold text-gray-900">
-                          {p.name}
-                          {p.age ? `, ${p.age}` : ""}
-                        </h3>
-                        {inactive && (
-                          <span className="text-xs rounded-full px-2 py-0.5 border border-gray-300 text-gray-600">
-                            Deaktiveret
-                          </span>
-                        )}
-                      </div>
-                      {p.bio && (
-                        <p className="text-gray-700 mt-1">{p.bio}</p>
-                      )}
-                      <p className="text-xs text-gray-400 mt-2">ID: {p.id}</p>
+      {/* Liste over profiler */}
+      <section>
+        <h2 className="text-lg font-semibold mb-3">Eksisterende profiler</h2>
+        {loading ? (
+          <div>Loader…</div>
+        ) : profiles.length === 0 ? (
+          <div className="rounded-xl border p-5 text-sm text-gray-600">
+            Ingen profiler
+          </div>
+        ) : (
+          <ul className="grid sm:grid-cols-2 gap-4">
+            {profiles.map((p) => (
+              <li key={p.id} className="rounded-2xl border p-4">
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <div className="font-semibold">
+                      {p.name}
+                      {p.age ? `, ${p.age}` : ""}
                     </div>
-
-                    <div className="flex gap-2">
-                      {!inactive && (
-                        <button
-                          onClick={() => startEdit(p)}
-                          className="rounded-lg border border-gray-300 text-gray-700 px-3 py-2 hover:bg-gray-50"
-                        >
-                          Rediger
-                        </button>
-                      )}
-                      {!inactive ? (
-                        <button
-                          onClick={() => softRemove(p.id)}
-                          disabled={busyId === p.id}
-                          className="rounded-lg border border-yellow-300 text-yellow-700 px-3 py-2 hover:bg-yellow-50 disabled:opacity-60"
-                        >
-                          {busyId === p.id ? "Deaktiverer…" : "Deaktiver"}
-                        </button>
-                      ) : (
-                        <button
-                          onClick={() => restore(p.id)}
-                          disabled={busyId === p.id}
-                          className="rounded-lg border border-green-300 text-green-700 px-3 py-2 hover:bg-green-50 disabled:opacity-60"
-                        >
-                          {busyId === p.id ? "Gendanner…" : "Gendan"}
-                        </button>
-                      )}
-                      <button
-                        onClick={() => hardRemove(p.id)}
-                        disabled={busyId === p.id}
-                        className="rounded-lg border border-red-300 text-red-600 px-3 py-2 hover:bg-red-50 disabled:opacity-60"
-                      >
-                        {busyId === p.id ? "Sletter…" : "Slet permanent"}
-                      </button>
-                    </div>
+                    {p.bio ? (
+                      <p className="mt-2 text-sm whitespace-pre-line">{p.bio}</p>
+                    ) : null}
                   </div>
-                ) : (
-                  <div className="space-y-3">
-                    <div className="grid gap-3 md:grid-cols-2">
-                      <label className="block">
-                        <span className="text-sm text-gray-600">Navn</span>
-                        <input
-                          className="mt-1 w-full rounded-lg border px-3 py-2"
-                          value={edit.name}
-                          onChange={(e) =>
-                            setEdit((s) => ({ ...s, name: e.target.value }))
-                          }
-                        />
-                      </label>
-                      <label className="block">
-                        <span className="text-sm text-gray-600">Alder</span>
-                        <input
-                          className="mt-1 w-full rounded-lg border px-3 py-2"
-                          value={edit.age}
-                          onChange={(e) =>
-                            setEdit((s) => ({ ...s, age: e.target.value }))
-                          }
-                          inputMode="numeric"
-                        />
-                      </label>
-                    </div>
-                    <label className="block">
-                      <span className="text-sm text-gray-600">Bio</span>
-                      <textarea
-                        className="mt-1 w-full rounded-lg border px-3 py-2"
-                        rows={3}
-                        value={edit.bio}
-                        onChange={(e) =>
-                          setEdit((s) => ({ ...s, bio: e.target.value }))
-                        }
+                  <button
+                    onClick={() => handleDelete(p.id)}
+                    className="rounded-lg border px-3 py-1 text-sm hover:bg-gray-50"
+                    title="Slet"
+                  >
+                    Slet
+                  </button>
+                </div>
+
+                {Array.isArray(p.photos) && p.photos.length > 0 ? (
+                  <div className="mt-3 grid grid-cols-3 gap-2">
+                    {p.photos.map((url, i) => (
+                      <img
+                        key={i}
+                        src={url}
+                        alt={`photo-${i}`}
+                        className="w-full h-24 object-cover rounded-lg border"
                       />
-                    </label>
-                    <div className="flex gap-2">
-                      <button
-                        onClick={() => saveEdit(p.id)}
-                        disabled={busyId === p.id}
-                        className="rounded-lg bg-pink-500 text-white px-4 py-2 hover:opacity-95 disabled:opacity-60"
-                      >
-                        {busyId === p.id ? "Gemmer…" : "Gem"}
-                      </button>
-                      <button
-                        onClick={cancelEdit}
-                        className="rounded-lg border border-gray-300 text-gray-700 px-4 py-2 hover:bg-gray-50"
-                      >
-                        Fortryd
-                      </button>
-                    </div>
+                    ))}
                   </div>
-                )}
+                ) : null}
               </li>
-            )
-          })}
-        </ul>
-      )}
-
-      {/* Pager bund */}
-      <div className="mt-6 flex items-center justify-between text-sm text-gray-600">
-        <span>
-          {total} profil{total === 1 ? "" : "er"} • side {page} af{" "}
-          {Math.max(1, pages)}
-        </span>
-        <div className="flex gap-2">
-          <button
-            onClick={() => fetchList({ page: Math.max(1, page - 1) })}
-            disabled={page <= 1}
-            className="rounded-lg border px-3 py-1 disabled:opacity-40"
-          >
-            ← Forrige
-          </button>
-          <button
-            onClick={() => fetchList({ page: Math.min(pages, page + 1) })}
-            disabled={page >= pages}
-            className="rounded-lg border px-3 py-1 disabled:opacity-40"
-          >
-            Næste →
-          </button>
-        </div>
-      </div>
-    </section>
-  )
+            ))}
+          </ul>
+        )}
+      </section>
+    </main>
+  );
 }
