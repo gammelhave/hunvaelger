@@ -111,17 +111,38 @@ export default function AdminPage() {
     } catch { setError("Kunne ikke slette alle profiler.") }
     finally { setClearing(false) }
   }
-
   return (
     <section className="container mx-auto px-4 py-16">
-      <div className="mb-6 flex items-center justify-between gap-4">
+      <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
         <h1 className="text-3xl md:text-4xl font-semibold text-gray-900">Admin – Profiler</h1>
-        <button onClick={removeAll} disabled={clearing || list.length === 0}
-          className="rounded-lg border border-red-300 text-red-600 px-3 py-2 hover:bg-red-50 disabled:opacity-50">
-          {clearing ? "Sletter alle…" : "Tøm alle (permanent)"}
-        </button>
-      </div>
 
+        <div className="flex gap-2">
+          <button
+            onClick={() => (window.location.href = "/api/admin/export?format=csv")}
+            className="rounded-lg border border-gray-300 text-gray-700 px-3 py-2 hover:bg-gray-50"
+            title="Eksportér som CSV"
+          >
+            Eksportér CSV
+          </button>
+          <button
+            onClick={() => (window.location.href = "/api/admin/export?format=json")}
+            className="rounded-lg border border-gray-300 text-gray-700 px-3 py-2 hover:bg-gray-50"
+            title="Eksportér som JSON"
+          >
+            Eksportér JSON
+          </button>
+
+          <button
+            onClick={removeAll}
+            disabled={clearing || list.length === 0}
+            className="rounded-lg border border-red-300 text-red-600 px-3 py-2 hover:bg-red-50 disabled:opacity-50"
+            title="Slet alle profiler permanent"
+          >
+            {clearing ? "Sletter alle…" : "Tøm alle (permanent)"}
+          </button>
+        </div>
+      </div>
+ 
       {error && <p className="text-red-600 mb-4">{error}</p>}
 
       {loading ? (
