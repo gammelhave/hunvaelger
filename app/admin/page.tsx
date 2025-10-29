@@ -2,32 +2,71 @@
 
 import { useEffect, useState } from "react"
 
-type Profile = { id: string; name: string; age?: number; bio?: string; active?: boolean; deletedAt?: number | null }
+type Profile = {
+  id: string
+  name: string
+  age?: number
+  bio?: string
+  active?: boolean
+  deletedAt?: number | null
+}
 
 export default function AdminPage() {
+  // data & ui state
   const [list, setList] = useState<Profile[]>([])
   const [loading, setLoading] = useState(true)
-  const [busyId, setBusyId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const [editingId, setEditingId] = useState<string | null>(null)
-  const [edit, setEdit] = useState<{ name: string; age: string; bio: string }>({ name: "", age: "", bio: "" })
+  const [busyId, setBusyId] = useState<string | null>(null)
   const [clearing, setClearing] = useState(false)
 
-  // søgning/paginering
+  // edit state
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [edit, setEdit] = useState<{ name: string; age: string; bio: string }>({
+    name: "",
+    age: "",
+    bio: "",
+  })
+
+  // filters & pagination
   const [q, setQ] = useState("")
+  const [minAge, setMinAge] = useState("")
+  const [maxAge, setMaxAge] = useState("")
+  const [sort, setSort] = useState<"newest" | "oldest" | "name">("newest")
+
   const [page, setPage] = useState(1)
   const [limit] = useState(10)
   const [total, setTotal] = useState(0)
   const pages = Math.max(1, Math.ceil(total / limit))
 
-  async function fetchList(opts?: { q?: string; page?: number }) {
+  // ------- helpers -------
+  async function fetchList(opts?: {
+    q?: string
+    page?: number
+    minAge?: string
+    maxAge?: string
+    sort?: string
+  }) {
     const q2 = (opts?.q ?? q).trim()
     const p2 = opts?.page ?? page
+    const min2 = (opts?.minAge ?? minAge).trim()
+    const max2 = (opts?.maxAge ?? maxAge).trim()
+    const sort2 = (opts?.sort ?? sort)
+
     setLoading(true)
     setError(null)
     try {
-      const params = new URLSearchParams({ q: q2, page: String(p2), limit: String(limit) })
-      const res = await fetch(`/api/admin/list?${params.toString()}`, { cache: "no-store" })
+      const params = new URLSearchParams({
+        q: q2,
+        page: String(p2),
+        limit: String(limit),
+        sort: sort2,
+      })
+      if (min2) params.set("minAge", min2)
+      if (max2) params.set("maxAge", max2)
+
+      const res = await fetch(`/api/admin/list?${params.toString()}`, {
+        cache: "no-store",
+      })
       if (!res.ok) throw new Error()
       const data = await res.json()
       setList(data.items ?? [])
@@ -42,88 +81,136 @@ export default function AdminPage() {
 
   useEffect(() => {
     fetchList()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   function startEdit(p: Profile) {
     setEditingId(p.id)
-    setEdit({ name: p.name ?? "", age: p.age ? String(p.age) : "", bio: p.bio ?? "" })
+    setEdit({
+      name: p.name ?? "",
+      age: p.age ? String(p.age) : "",
+      bio: p.bio ?? "",
+    })
   }
-  function cancelEdit() { setEditingId(null) }
+  function cancelEdit() {
+    setEditingId(null)
+  }
 
   async function saveEdit(id: string) {
-    setBusyId(id); setError(null)
+    setBusyId(id)
+    setError(null)
     try {
-      const payload: any = { name: edit.name.trim(), bio: edit.bio.trim() }
+      const payload: any = {
+        name: edit.name.trim(),
+        bio: edit.bio.trim(),
+      }
       if (edit.age.trim() !== "") payload.age = Number(edit.age)
-      const res = await fetch(`/api/profiles/${id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) })
+
+      const res = await fetch(`/api/profiles/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      })
       if (!res.ok) throw new Error()
       const { profile } = await res.json()
       setList((prev) => prev.map((p) => (p.id === id ? profile : p)))
       setEditingId(null)
-    } catch { setError("Kunne ikke gemme ændringer.") }
-    finally { setBusyId(null) }
+    } catch {
+      setError("Kunne ikke gemme ændringer.")
+    } finally {
+      setBusyId(null)
+    }
   }
 
   async function softRemove(id: string) {
     if (!confirm("Deaktivér (soft delete) denne profil?")) return
-    setBusyId(id); setError(null)
+    setBusyId(id)
+    setError(null)
     try {
       const res = await fetch(`/api/profiles/${id}`, { method: "DELETE" })
       if (!res.ok) throw new Error()
-      setList((prev) => prev.map((p) => (p.id === id ? { ...p, active: false, deletedAt: Date.now() } : p)))
-    } catch { setError("Kunne ikke deaktivere profilen.") }
-    finally { setBusyId(null) }
+      setList((prev) =>
+        prev.map((p) =>
+          p.id === id ? { ...p, active: false, deletedAt: Date.now() } : p
+        )
+      )
+    } catch {
+      setError("Kunne ikke deaktivere profilen.")
+    } finally {
+      setBusyId(null)
+    }
   }
 
   async function restore(id: string) {
-    setBusyId(id); setError(null)
+    setBusyId(id)
+    setError(null)
     try {
       const res = await fetch(`/api/profiles/${id}`, { method: "POST" })
       if (!res.ok) throw new Error()
       const { profile } = await res.json()
       setList((prev) => prev.map((p) => (p.id === id ? profile : p)))
-    } catch { setError("Kunne ikke gendanne profilen.") }
-    finally { setBusyId(null) }
+    } catch {
+      setError("Kunne ikke gendanne profilen.")
+    } finally {
+      setBusyId(null)
+    }
   }
 
   async function hardRemove(id: string) {
     if (!confirm("SLET PERMANENT? Dette kan ikke fortrydes.")) return
-    setBusyId(id); setError(null)
+    setBusyId(id)
+    setError(null)
     try {
       const res = await fetch(`/api/profiles/${id}?hard=1`, { method: "DELETE" })
       if (!res.ok) throw new Error()
       setList((prev) => prev.filter((p) => p.id !== id))
       setTotal((t) => Math.max(0, t - 1))
-    } catch { setError("Kunne ikke slette permanent.") }
-    finally { setBusyId(null) }
+    } catch {
+      setError("Kunne ikke slette permanent.")
+    } finally {
+      setBusyId(null)
+    }
   }
 
   async function removeAll() {
     if (!confirm("Slet ALLE profiler permanent?")) return
-    setClearing(true); setError(null)
+    setClearing(true)
+    setError(null)
     try {
       const res = await fetch("/api/profiles/clear", { method: "POST" })
       if (!res.ok) throw new Error()
-      setList([]); setTotal(0); setPage(1)
-    } catch { setError("Kunne ikke slette alle profiler.") }
-    finally { setClearing(false) }
+      setList([])
+      setTotal(0)
+      setPage(1)
+    } catch {
+      setError("Kunne ikke slette alle profiler.")
+    } finally {
+      setClearing(false)
+    }
   }
 
   return (
     <section className="container mx-auto px-4 py-16">
+      {/* Header + actions */}
       <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
-        <h1 className="text-3xl md:text-4xl font-semibold text-gray-900">Admin – Profiler</h1>
+        <h1 className="text-3xl md:text-4xl font-semibold text-gray-900">
+          Admin – Profiler
+        </h1>
 
         <div className="flex gap-2">
           <button
-            onClick={() => (window.location.href = "/api/admin/export?format=csv")}
+            onClick={() =>
+              (window.location.href = "/api/admin/export?format=csv")
+            }
             className="rounded-lg border border-gray-300 text-gray-700 px-3 py-2 hover:bg-gray-50"
             title="Eksportér som CSV"
           >
             Eksportér CSV
           </button>
           <button
-            onClick={() => (window.location.href = "/api/admin/export?format=json")}
+            onClick={() =>
+              (window.location.href = "/api/admin/export?format=json")
+            }
             className="rounded-lg border border-gray-300 text-gray-700 px-3 py-2 hover:bg-gray-50"
             title="Eksportér som JSON"
           >
@@ -140,27 +227,53 @@ export default function AdminPage() {
         </div>
       </div>
 
-      {/* Søgning */}
+      {/* Filterbar */}
       <form
         onSubmit={(e) => {
           e.preventDefault()
-          fetchList({ q, page: 1 })
+          fetchList({ q, page: 1, minAge, maxAge, sort })
         }}
-        className="mb-4 flex gap-2"
+        className="mb-4 grid gap-2 md:grid-cols-[1fr,120px,120px,160px,auto]"
       >
         <input
           value={q}
           onChange={(e) => setQ(e.target.value)}
           placeholder="Søg navn eller bio…"
-          className="w-full rounded-lg border px-3 py-2"
+          className="rounded-lg border px-3 py-2"
         />
-        <button className="rounded-lg bg-pink-500 text-white px-4 py-2">Søg</button>
+        <input
+          value={minAge}
+          onChange={(e) => setMinAge(e.target.value)}
+          placeholder="Min alder"
+          inputMode="numeric"
+          className="rounded-lg border px-3 py-2"
+        />
+        <input
+          value={maxAge}
+          onChange={(e) => setMaxAge(e.target.value)}
+          placeholder="Max alder"
+          inputMode="numeric"
+          className="rounded-lg border px-3 py-2"
+        />
+        <select
+          value={sort}
+          onChange={(e) => setSort(e.target.value as any)}
+          className="rounded-lg border px-3 py-2"
+        >
+          <option value="newest">Nyeste</option>
+          <option value="oldest">Ældste</option>
+          <option value="name">Navn (A→Å)</option>
+        </select>
+        <button className="rounded-lg bg-pink-500 text-white px-4 py-2">
+          Filtrér
+        </button>
       </form>
 
       {/* Pager top */}
       <div className="mb-3 flex items-center justify-between text-sm text-gray-600">
         <span>
-          {total} profil{total === 1 ? "" : "er"} • side {page} af {Math.max(1, pages)}
+          {total} profil{total === 1 ? "" : "er"} • side {page} af{" "}
+          {Math.max(1, pages)}
         </span>
         <div className="flex gap-2">
           <button
@@ -192,13 +305,19 @@ export default function AdminPage() {
             const isEditing = editingId === p.id
             const inactive = p.active === false
             return (
-              <li key={p.id} className={`rounded-2xl border bg-white p-5 ${inactive ? "opacity-70" : ""}`}>
+              <li
+                key={p.id}
+                className={`rounded-2xl border bg-white p-5 ${
+                  inactive ? "opacity-70" : ""
+                }`}
+              >
                 {!isEditing ? (
                   <div className="flex items-start justify-between gap-4">
                     <div>
                       <div className="flex items-center gap-2">
                         <h3 className="text-lg font-semibold text-gray-900">
-                          {p.name}{p.age ? `, ${p.age}` : ""}
+                          {p.name}
+                          {p.age ? `, ${p.age}` : ""}
                         </h3>
                         {inactive && (
                           <span className="text-xs rounded-full px-2 py-0.5 border border-gray-300 text-gray-600">
@@ -206,30 +325,43 @@ export default function AdminPage() {
                           </span>
                         )}
                       </div>
-                      {p.bio && <p className="text-gray-700 mt-1">{p.bio}</p>}
+                      {p.bio && (
+                        <p className="text-gray-700 mt-1">{p.bio}</p>
+                      )}
                       <p className="text-xs text-gray-400 mt-2">ID: {p.id}</p>
                     </div>
 
                     <div className="flex gap-2">
                       {!inactive && (
-                        <button onClick={() => startEdit(p)}
-                          className="rounded-lg border border-gray-300 text-gray-700 px-3 py-2 hover:bg-gray-50">
+                        <button
+                          onClick={() => startEdit(p)}
+                          className="rounded-lg border border-gray-300 text-gray-700 px-3 py-2 hover:bg-gray-50"
+                        >
                           Rediger
                         </button>
                       )}
                       {!inactive ? (
-                        <button onClick={() => softRemove(p.id)} disabled={busyId === p.id}
-                          className="rounded-lg border border-yellow-300 text-yellow-700 px-3 py-2 hover:bg-yellow-50 disabled:opacity-60">
+                        <button
+                          onClick={() => softRemove(p.id)}
+                          disabled={busyId === p.id}
+                          className="rounded-lg border border-yellow-300 text-yellow-700 px-3 py-2 hover:bg-yellow-50 disabled:opacity-60"
+                        >
                           {busyId === p.id ? "Deaktiverer…" : "Deaktiver"}
                         </button>
                       ) : (
-                        <button onClick={() => restore(p.id)} disabled={busyId === p.id}
-                          className="rounded-lg border border-green-300 text-green-700 px-3 py-2 hover:bg-green-50 disabled:opacity-60">
+                        <button
+                          onClick={() => restore(p.id)}
+                          disabled={busyId === p.id}
+                          className="rounded-lg border border-green-300 text-green-700 px-3 py-2 hover:bg-green-50 disabled:opacity-60"
+                        >
                           {busyId === p.id ? "Gendanner…" : "Gendan"}
                         </button>
                       )}
-                      <button onClick={() => hardRemove(p.id)} disabled={busyId === p.id}
-                        className="rounded-lg border border-red-300 text-red-600 px-3 py-2 hover:bg-red-50 disabled:opacity-60">
+                      <button
+                        onClick={() => hardRemove(p.id)}
+                        disabled={busyId === p.id}
+                        className="rounded-lg border border-red-300 text-red-600 px-3 py-2 hover:bg-red-50 disabled:opacity-60"
+                      >
                         {busyId === p.id ? "Sletter…" : "Slet permanent"}
                       </button>
                     </div>
@@ -239,27 +371,49 @@ export default function AdminPage() {
                     <div className="grid gap-3 md:grid-cols-2">
                       <label className="block">
                         <span className="text-sm text-gray-600">Navn</span>
-                        <input className="mt-1 w-full rounded-lg border px-3 py-2"
-                          value={edit.name} onChange={(e) => setEdit((s) => ({ ...s, name: e.target.value }))} />
+                        <input
+                          className="mt-1 w-full rounded-lg border px-3 py-2"
+                          value={edit.name}
+                          onChange={(e) =>
+                            setEdit((s) => ({ ...s, name: e.target.value }))
+                          }
+                        />
                       </label>
                       <label className="block">
                         <span className="text-sm text-gray-600">Alder</span>
-                        <input className="mt-1 w-full rounded-lg border px-3 py-2"
-                          value={edit.age} onChange={(e) => setEdit((s) => ({ ...s, age: e.target.value }))} inputMode="numeric" />
+                        <input
+                          className="mt-1 w-full rounded-lg border px-3 py-2"
+                          value={edit.age}
+                          onChange={(e) =>
+                            setEdit((s) => ({ ...s, age: e.target.value }))
+                          }
+                          inputMode="numeric"
+                        />
                       </label>
                     </div>
                     <label className="block">
                       <span className="text-sm text-gray-600">Bio</span>
-                      <textarea className="mt-1 w-full rounded-lg border px-3 py-2" rows={3}
-                        value={edit.bio} onChange={(e) => setEdit((s) => ({ ...s, bio: e.target.value }))} />
+                      <textarea
+                        className="mt-1 w-full rounded-lg border px-3 py-2"
+                        rows={3}
+                        value={edit.bio}
+                        onChange={(e) =>
+                          setEdit((s) => ({ ...s, bio: e.target.value }))
+                        }
+                      />
                     </label>
                     <div className="flex gap-2">
-                      <button onClick={() => saveEdit(p.id)} disabled={busyId === p.id}
-                        className="rounded-lg bg-pink-500 text-white px-4 py-2 hover:opacity-95 disabled:opacity-60">
+                      <button
+                        onClick={() => saveEdit(p.id)}
+                        disabled={busyId === p.id}
+                        className="rounded-lg bg-pink-500 text-white px-4 py-2 hover:opacity-95 disabled:opacity-60"
+                      >
                         {busyId === p.id ? "Gemmer…" : "Gem"}
                       </button>
-                      <button onClick={cancelEdit}
-                        className="rounded-lg border border-gray-300 text-gray-700 px-4 py-2 hover:bg-gray-50">
+                      <button
+                        onClick={cancelEdit}
+                        className="rounded-lg border border-gray-300 text-gray-700 px-4 py-2 hover:bg-gray-50"
+                      >
                         Fortryd
                       </button>
                     </div>
@@ -274,7 +428,8 @@ export default function AdminPage() {
       {/* Pager bund */}
       <div className="mt-6 flex items-center justify-between text-sm text-gray-600">
         <span>
-          {total} profil{total === 1 ? "" : "er"} • side {page} af {Math.max(1, pages)}
+          {total} profil{total === 1 ? "" : "er"} • side {page} af{" "}
+          {Math.max(1, pages)}
         </span>
         <div className="flex gap-2">
           <button
