@@ -1,52 +1,43 @@
-import { NextResponse } from "next/server"
-import { softDeleteProfile, hardDeleteProfile, updateProfile, restoreProfile } from "@/lib/db-kv"
+import { NextRequest, NextResponse } from "next/server";
+import { kv } from "@vercel/kv";
 
-export const dynamic = "force-dynamic"
+type Profile = {
+  id: string;
+  name: string;
+  age: number;
+  bio: string;
+  images?: string[];
+};
 
-// ?hard=1 gør sletning permanent, ellers soft delete
-export async function DELETE(
-  req: Request,
-  { params }: { params: { id: string } }
-) {
-  const { id } = params
-  if (!id) return NextResponse.json({ ok: false, error: "Mangler id" }, { status: 400 })
-  const url = new URL(req.url)
-  const hard = url.searchParams.get("hard") === "1"
+// Hent én profil (GET /api/profiles/:id)
+export async function GET(_: NextRequest, { params }: { params: { id: string } }) {
+  const { id } = params;
+  const raw = await kv.hget<string>("profiles", id);
+  if (!raw) return NextResponse.json({ ok: false, error: "Not found" }, { status: 404 });
+  return NextResponse.json({ ok: true, profile: JSON.parse(raw) as Profile });
+}
 
-  if (hard) {
-    await hardDeleteProfile(id)
-  } else {
-    const r = await softDeleteProfile(id)
-    if (!r.ok) return NextResponse.json(r, { status: 404 })
+// Opdatér profil (PUT /api/profiles/:id)
+export async function PUT(req: NextRequest, { params }: { params: { id: string } }) {
+  const { id } = params;
+  const body = await req.json(); // fx { name, age, bio, images }
+
+  const raw = await kv.hget<string>("profiles", id);
+  if (!raw) return NextResponse.json({ ok: false, error: "Not found" }, { status: 404 });
+
+  const current = JSON.parse(raw) as Profile;
+  const next: Profile = { ...current, ...body };
+
+  // Valider billeder
+  if (next.images) {
+    if (!Array.isArray(next.images)) {
+      return NextResponse.json({ ok: false, error: "images must be an array" }, { status: 400 });
+    }
+    if (next.images.length > 3) {
+      return NextResponse.json({ ok: false, error: "Max 3 billeder" }, { status: 400 });
+    }
   }
-  return NextResponse.json({ ok: true })
-}
 
-export async function PATCH(
-  req: Request,
-  { params }: { params: { id: string } }
-) {
-  const { id } = params
-  if (!id) return NextResponse.json({ ok: false, error: "Mangler id" }, { status: 400 })
-
-  const body = await req.json().catch(() => ({}))
-  const name = typeof body.name === "string" ? body.name.trim() : undefined
-  const age = Number.isFinite(Number(body.age)) ? Number(body.age) : undefined
-  const bio = typeof body.bio === "string" ? body.bio.trim() : undefined
-
-  const result = await updateProfile(id, { name, age, bio })
-  if (!result.ok) return NextResponse.json(result, { status: 404 })
-  return NextResponse.json({ ok: true, profile: result.profile })
-}
-
-// POST /api/profiles/[id]/restore
-export async function POST(
-  _req: Request,
-  { params }: { params: { id: string } }
-) {
-  const { id } = params
-  if (!id) return NextResponse.json({ ok: false, error: "Mangler id" }, { status: 400 })
-  const r = await restoreProfile(id)
-  if (!r.ok) return NextResponse.json(r, { status: 404 })
-  return NextResponse.json({ ok: true, profile: r.profile })
+  await kv.hset("profiles", { [id]: JSON.stringify(next) });
+  return NextResponse.json({ ok: true, profile: next });
 }
