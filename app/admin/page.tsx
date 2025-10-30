@@ -2,40 +2,42 @@
 
 import { useEffect, useMemo, useState } from "react";
 
+/** ---------- Typer ---------- */
 type Profile = {
   id: string;
   name: string;
-  age?: number;
-  bio?: string;
-  active?: boolean;
-  photos?: string[]; // <= nye billed-URL’er
+  age: number;
+  bio: string;
+  images?: string[];
 };
 
+/** ---------- Admin-side ---------- */
 export default function AdminPage() {
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [loading, setLoading] = useState(true);
-  const [submitting, setSubmitting] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
 
-  // form state
-  const [name, setName] = useState("");
-  const [age, setAge] = useState<number | "">("");
-  const [bio, setBio] = useState("");
-  const [files, setFiles] = useState<File[]>([]);
-  const [previewUrls, setPreviewUrls] = useState<string[]>([]);
-  const [error, setError] = useState<string | null>(null);
-  const [okMsg, setOkMsg] = useState<string | null>(null);
+  // Opret-profil form state
+  const [newName, setNewName] = useState("");
+  const [newAge, setNewAge] = useState<number | "">("");
+  const [newBio, setNewBio] = useState("");
+  const [newFiles, setNewFiles] = useState<FileList | null>(null);
+  const newImagesCount = useMemo(() => (newFiles ? Math.min(newFiles.length, 3) : 0), [newFiles]);
 
-  // hent seneste profiler
+  // Rediger-modal state
+  const [editing, setEditing] = useState<Profile | null>(null);
+
+  /** ------ Helpers ------ */
   async function load() {
     setLoading(true);
-    setError(null);
+    setErr(null);
     try {
-      const res = await fetch("/api/profiles", { cache: "no-store" });
-      if (!res.ok) throw new Error(await res.text());
-      const data = await res.json();
-      setProfiles(Array.isArray(data?.profiles) ? data.profiles : []);
+      const r = await fetch("/api/profiles", { cache: "no-store" });
+      const j = await r.json();
+      if (!r.ok || !j?.ok) throw new Error(j?.error || "Kunne ikke hente profiler");
+      setProfiles(j.profiles as Profile[]);
     } catch (e: any) {
-      setError(e?.message ?? "Kunne ikke hente profiler");
+      setErr(e.message || "Ukendt fejl");
     } finally {
       setLoading(false);
     }
@@ -45,261 +47,359 @@ export default function AdminPage() {
     load();
   }, []);
 
-  // håndter valg af max 3 billeder
-  function onPickFiles(e: React.ChangeEvent<HTMLInputElement>) {
-    const list = Array.from(e.target.files ?? []);
-    const next = [...files, ...list].slice(0, 3);
-    setFiles(next);
-
-    // previews
-    const urls = next.map((f) => URL.createObjectURL(f));
-    setPreviewUrls(urls);
+  async function uploadOne(f: File): Promise<string> {
+    const fd = new FormData();
+    fd.append("file", f);
+    const r = await fetch("/api/upload", { method: "POST", body: fd });
+    const j = await r.json();
+    if (!r.ok || !j?.ok || !j?.url) throw new Error(j?.error || "Upload fejlede");
+    return j.url as string;
   }
-
-  function removeFile(idx: number) {
-    const next = files.filter((_, i) => i !== idx);
-    setFiles(next);
-    setPreviewUrls(next.map((f) => URL.createObjectURL(f)));
-  }
-
-  const canSubmit = useMemo(() => {
-    if (!name.trim()) return false;
-    if (age !== "" && (Number.isNaN(Number(age)) || Number(age) <= 0)) return false;
-    if (files.length > 3) return false;
-    return true;
-  }, [name, age, files.length]);
 
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault();
-    if (!canSubmit) return;
-
-    setSubmitting(true);
-    setError(null);
-    setOkMsg(null);
+    setErr(null);
 
     try {
-      // 1) upload billeder (0–3) til Blob og få URLs
-      let uploadedUrls: string[] = [];
-      if (files.length > 0) {
-        const fd = new FormData();
-        files.forEach((f) => fd.append("files", f));
-        const up = await fetch("/api/upload", { method: "POST", body: fd });
-        if (!up.ok) throw new Error(await up.text());
-        const { urls } = await up.json();
-        uploadedUrls = urls ?? [];
+      // 1) Upload evt. billeder (max 3)
+      const urls: string[] = [];
+      if (newFiles && newFiles.length) {
+        const toUpload = Array.from(newFiles).slice(0, 3);
+        for (const f of toUpload) {
+          if (f.size > 5 * 1024 * 1024) throw new Error("Hvert billede skal være under 5 MB");
+          urls.push(await uploadOne(f));
+        }
       }
 
-      // 2) POST profilen til din eksisterende /api/profiles
-      const res = await fetch("/api/profiles", {
+      // 2) Opret profil
+      const body = {
+        name: newName.trim(),
+        age: Number(newAge || 0),
+        bio: newBio.trim(),
+        images: urls,
+      };
+      const r = await fetch("/api/profiles", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name: name.trim(),
-          age: age === "" ? undefined : Number(age),
-          bio: bio.trim() || undefined,
-          photos: uploadedUrls, // <= gem disse URLs
-          active: true,
-        }),
+        body: JSON.stringify(body),
       });
-      if (!res.ok) throw new Error(await res.text());
+      const j = await r.json();
+      if (!r.ok || !j?.ok) throw new Error(j?.error || "Kunne ikke oprette profil");
 
-      setOkMsg("Profil oprettet ✔");
-      setName("");
-      setAge("");
-      setBio("");
-      setFiles([]);
-      setPreviewUrls([]);
+      // 3) Reset + reload
+      setNewName("");
+      setNewAge("");
+      setNewBio("");
+      setNewFiles(null);
       await load();
     } catch (e: any) {
-      setError(e?.message ?? "Kunne ikke oprette profil");
-    } finally {
-      setSubmitting(false);
+      setErr(e.message || "Ukendt fejl ved oprettelse");
     }
   }
 
   async function handleDelete(id: string) {
     if (!confirm("Slet profilen?")) return;
-    setError(null);
+    setErr(null);
     try {
-      const res = await fetch(`/api/profiles?id=${encodeURIComponent(id)}`, {
-        method: "DELETE",
-      });
-      if (!res.ok) throw new Error(await res.text());
+      // Prøv RESTful route først
+      let r = await fetch(`/api/profiles/${id}`, { method: "DELETE" });
+      if (r.status === 404) {
+        // Fallback til evt. ældre DELETE-implementering
+        r = await fetch("/api/profiles", {
+          method: "DELETE",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ id }),
+        });
+      }
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok || j?.ok === false) throw new Error(j?.error || "Kunne ikke slette");
       await load();
     } catch (e: any) {
-      setError(e?.message ?? "Kunne ikke slette profil");
+      setErr(e.message || "Fejl ved sletning");
     }
   }
 
   return (
-    <main className="mx-auto max-w-5xl p-6">
-      <h1 className="text-2xl font-bold mb-6">Admin – Profiler</h1>
+    <div className="max-w-5xl mx-auto p-6 space-y-8">
+      <h1 className="text-2xl font-bold">Admin – Profiler</h1>
 
       {/* Opret ny profil */}
-      <form
-        onSubmit={handleCreate}
-        className="mb-10 rounded-2xl border p-5 grid gap-4"
-      >
-        <h2 className="text-lg font-semibold">Opret ny profil</h2>
-
-        {error ? (
-          <div className="rounded-lg border border-red-300 bg-red-50 p-3 text-sm">
-            {error}
-          </div>
-        ) : null}
-        {okMsg ? (
-          <div className="rounded-lg border border-green-300 bg-green-50 p-3 text-sm">
-            {okMsg}
-          </div>
-        ) : null}
-
-        <div className="grid sm:grid-cols-2 gap-4">
-          <div>
-            <label className="block text-sm mb-1">Navn</label>
+      <form onSubmit={handleCreate} className="bg-white/70 rounded-2xl border p-4 md:p-6 space-y-4">
+        <div className="grid md:grid-cols-2 gap-4">
+          <label className="space-y-2">
+            <span className="text-sm text-gray-600">Navn</span>
             <input
-              className="w-full rounded-xl border px-3 py-2"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
+              className="w-full border rounded-lg p-2"
               placeholder="Navn"
+              value={newName}
+              onChange={(e) => setNewName(e.target.value)}
               required
             />
-          </div>
-          <div>
-            <label className="block text-sm mb-1">Alder</label>
+          </label>
+          <label className="space-y-2">
+            <span className="text-sm text-gray-600">Alder</span>
             <input
-              className="w-full rounded-xl border px-3 py-2"
-              value={age}
-              onChange={(e) => setAge(e.target.value === "" ? "" : Number(e.target.value))}
-              placeholder="fx 40"
+              className="w-full border rounded-lg p-2"
               type="number"
-              min={18}
+              placeholder="fx 40"
+              value={newAge}
+              onChange={(e) => setNewAge(e.target.value === "" ? "" : Number(e.target.value))}
+              required
             />
-          </div>
+          </label>
         </div>
 
-        <div>
-          <label className="block text-sm mb-1">Bio</label>
+        <label className="space-y-2 block">
+          <span className="text-sm text-gray-600">Bio</span>
           <textarea
-            className="w-full rounded-xl border px-3 py-2"
-            rows={5}
-            value={bio}
-            onChange={(e) => setBio(e.target.value)}
+            className="w-full border rounded-lg p-2 min-h-28"
             placeholder="Kort om dig…"
+            value={newBio}
+            onChange={(e) => setNewBio(e.target.value)}
           />
+        </label>
+
+        <div className="space-y-1">
+          <label className="inline-flex items-center gap-3">
+            <input
+              type="file"
+              accept="image/*"
+              multiple
+              onChange={(e) => setNewFiles(e.currentTarget.files)}
+            />
+            <span className="text-sm text-gray-600">Billeder (max 3)</span>
+          </label>
+          <div className="text-xs text-gray-500">Anbefaling: JPG/PNG, &lt; 5 MB pr. fil.</div>
+          <div className="text-xs text-gray-500">{newImagesCount}/3 valgt</div>
         </div>
 
-        <div>
-          <div className="flex items-baseline justify-between">
-            <label className="block text-sm mb-1">Billeder (max 3)</label>
-            <span className="text-xs text-gray-500">{files.length}/3</span>
-          </div>
-          <input
-            type="file"
-            accept="image/*"
-            multiple
-            onChange={onPickFiles}
-            className="block"
-          />
-          {previewUrls.length > 0 ? (
-            <div className="mt-3 grid grid-cols-3 gap-3">
-              {previewUrls.map((url, idx) => (
-                <div key={idx} className="relative">
-                  <img
-                    src={url}
-                    alt={`preview-${idx}`}
-                    className="w-full h-32 object-cover rounded-xl border"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => removeFile(idx)}
-                    className="absolute -top-2 -right-2 rounded-full border bg-white px-2 py-1 text-xs shadow"
-                    title="Fjern"
-                  >
-                    ✕
-                  </button>
-                </div>
-              ))}
-            </div>
-          ) : null}
-          <p className="text-xs text-gray-500 mt-2">
-            Anbefaling: JPG/PNG, &lt; 5 MB pr. fil.
-          </p>
-        </div>
-
-        <div className="flex gap-3">
-          <button
-            disabled={!canSubmit || submitting}
-            className="rounded-xl bg-pink-500 px-4 py-2 text-white disabled:opacity-50"
-          >
-            {submitting ? "Opretter…" : "Opret profil"}
-          </button>
+        <div className="flex gap-2">
+          <button className="px-4 py-2 rounded-lg bg-pink-500 text-white">Opret profil</button>
           <button
             type="button"
+            className="px-4 py-2 rounded-lg border"
             onClick={() => {
-              setName("");
-              setAge("");
-              setBio("");
-              setFiles([]);
-              setPreviewUrls([]);
-              setError(null);
-              setOkMsg(null);
+              setNewName("");
+              setNewAge("");
+              setNewBio("");
+              setNewFiles(null);
             }}
-            className="rounded-xl border px-4 py-2"
           >
             Nulstil
           </button>
         </div>
       </form>
 
-      {/* Liste over profiler */}
-      <section>
-        <h2 className="text-lg font-semibold mb-3">Eksisterende profiler</h2>
+      {/* Eksisterende profiler */}
+      <section className="space-y-3">
+        <h2 className="text-lg font-semibold">Eksisterende profiler</h2>
+
         {loading ? (
-          <div>Loader…</div>
+          <div className="text-sm text-gray-600">Indlæser…</div>
         ) : profiles.length === 0 ? (
-          <div className="rounded-xl border p-5 text-sm text-gray-600">
-            Ingen profiler
-          </div>
+          <div className="text-sm text-gray-600">Ingen profiler endnu.</div>
         ) : (
-          <ul className="grid sm:grid-cols-2 gap-4">
+          <div className="grid md:grid-cols-2 gap-4">
             {profiles.map((p) => (
-              <li key={p.id} className="rounded-2xl border p-4">
-                <div className="flex items-start justify-between gap-4">
-                  <div>
-                    <div className="font-semibold">
-                      {p.name}
-                      {p.age ? `, ${p.age}` : ""}
-                    </div>
-                    {p.bio ? (
-                      <p className="mt-2 text-sm whitespace-pre-line">{p.bio}</p>
-                    ) : null}
+              <article key={p.id} className="border rounded-2xl p-4 space-y-2 bg-white/70">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="font-semibold">{p.name}, {p.age}</div>
+                  <div className="flex gap-2">
+                    <button
+                      className="px-3 py-1 rounded border"
+                      onClick={() => setEditing(p)}
+                    >
+                      Rediger
+                    </button>
+                    <button
+                      className="px-3 py-1 rounded border"
+                      onClick={() => handleDelete(p.id)}
+                    >
+                      Slet
+                    </button>
                   </div>
-                  <button
-                    onClick={() => handleDelete(p.id)}
-                    className="rounded-lg border px-3 py-1 text-sm hover:bg-gray-50"
-                    title="Slet"
-                  >
-                    Slet
-                  </button>
                 </div>
 
-                {Array.isArray(p.photos) && p.photos.length > 0 ? (
-                  <div className="mt-3 grid grid-cols-3 gap-2">
-                    {p.photos.map((url, i) => (
-                      <img
-                        key={i}
-                        src={url}
-                        alt={`photo-${i}`}
-                        className="w-full h-24 object-cover rounded-lg border"
-                      />
+                <p className="text-sm text-gray-700 whitespace-pre-wrap">{p.bio}</p>
+
+                {p.images?.length ? (
+                  <div className="grid grid-cols-3 gap-2 pt-1">
+                    {p.images.map((u) => (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img key={u} src={u} alt="" className="w-full h-24 object-cover rounded-lg border" />
                     ))}
                   </div>
-                ) : null}
-              </li>
+                ) : (
+                  <p className="text-xs text-gray-500">Ingen billeder endnu.</p>
+                )}
+              </article>
             ))}
-          </ul>
+          </div>
         )}
+
+        {err && <div className="text-sm text-red-600">{err}</div>}
       </section>
-    </main>
+
+      {/* Rediger-modal */}
+      {editing && (
+        <EditProfileDialog
+          profile={editing}
+          onClose={() => setEditing(null)}
+          onSaved={(upd) => {
+            setProfiles((prev) => prev.map((x) => (x.id === upd.id ? upd : x)));
+            setEditing(null);
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+/** ---------- Rediger-dialog (modal) ---------- */
+function EditProfileDialog({
+  profile,
+  onClose,
+  onSaved,
+}: {
+  profile: Profile;
+  onClose: () => void;
+  onSaved: (p: Profile) => void;
+}) {
+  const [name, setName] = useState(profile.name);
+  const [age, setAge] = useState<number | "">(profile.age || "");
+  const [bio, setBio] = useState(profile.bio || "");
+  const [images, setImages] = useState<string[]>(profile.images ?? []);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  async function uploadOne(f: File): Promise<string> {
+    const fd = new FormData();
+    fd.append("file", f);
+    const r = await fetch("/api/upload", { method: "POST", body: fd });
+    const j = await r.json();
+    if (!r.ok || !j?.ok || !j?.url) throw new Error(j?.error || "Upload fejlede");
+    return j.url as string;
+  }
+
+  async function handleAddFiles(files: FileList | null) {
+    if (!files || files.length === 0) return;
+    const cap = 3 - images.length;
+    if (cap <= 0) return setErr("Du har allerede 3 billeder.");
+    setErr(null);
+    setBusy(true);
+    try {
+      const toUpload = Array.from(files).slice(0, cap);
+      const newUrls: string[] = [];
+      for (const f of toUpload) {
+        if (f.size > 5 * 1024 * 1024) throw new Error("Hvert billede skal være under 5 MB");
+        newUrls.push(await uploadOne(f));
+      }
+      setImages((prev) => [...prev, ...newUrls]);
+    } catch (e: any) {
+      setErr(e.message || "Ukendt fejl ved upload");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function removeImage(url: string) {
+    setImages((prev) => prev.filter((u) => u !== url));
+  }
+
+  async function save() {
+    setBusy(true);
+    setErr(null);
+    try {
+      const body = {
+        name: name.trim(),
+        age: Number(age || 0),
+        bio: bio.trim(),
+        images,
+      };
+      const r = await fetch(`/api/profiles/${profile.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      const j = await r.json();
+      if (!r.ok || !j?.ok) throw new Error(j?.error || "Kunne ikke gemme");
+      onSaved(j.profile as Profile);
+    } catch (e: any) {
+      setErr(e.message || "Ukendt fejl");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/30 flex items-center justify-center p-4 z-50">
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl p-6 space-y-4">
+        <div className="flex items-center justify-between">
+          <h2 className="text-xl font-semibold">Rediger profil</h2>
+          <button className="px-3 py-1 rounded border" onClick={onClose} disabled={busy}>Luk</button>
+        </div>
+
+        <div className="grid md:grid-cols-2 gap-4">
+          <label className="space-y-2">
+            <span className="text-sm text-gray-600">Navn</span>
+            <input className="w-full border rounded-lg p-2" value={name} onChange={(e) => setName(e.target.value)} />
+          </label>
+          <label className="space-y-2">
+            <span className="text-sm text-gray-600">Alder</span>
+            <input
+              className="w-full border rounded-lg p-2"
+              type="number"
+              value={age}
+              onChange={(e) => setAge(e.target.value === "" ? "" : Number(e.target.value))}
+            />
+          </label>
+        </div>
+
+        <label className="space-y-2 block">
+          <span className="text-sm text-gray-600">Bio</span>
+          <textarea className="w-full border rounded-lg p-2 min-h-28" value={bio} onChange={(e) => setBio(e.target.value)} />
+        </label>
+
+        <div className="space-y-2">
+          <div className="flex items-center justify-between">
+            <span className="text-sm text-gray-600">Billeder (max 3)</span>
+            <input
+              type="file"
+              accept="image/*"
+              multiple
+              onChange={(e) => handleAddFiles(e.currentTarget.files)}
+              disabled={busy || images.length >= 3}
+            />
+          </div>
+
+          {images.length > 0 && (
+            <div className="grid grid-cols-3 gap-3">
+              {images.map((url) => (
+                <div key={url} className="relative group">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={url} alt="" className="w-full h-28 object-cover rounded-lg border" />
+                  <button
+                    type="button"
+                    onClick={() => removeImage(url)}
+                    className="absolute top-1 right-1 bg-white/90 border rounded px-2 py-1 text-xs opacity-0 group-hover:opacity-100 transition"
+                  >
+                    Fjern
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+
+          <p className="text-xs text-gray-500">Anbefaling: JPG/PNG, &lt; 5 MB pr. fil.</p>
+        </div>
+
+        {err && <div className="text-sm text-red-600">{err}</div>}
+
+        <div className="flex justify-end gap-2">
+          <button className="px-4 py-2 rounded-lg border" onClick={onClose} disabled={busy}>Annullér</button>
+          <button className="px-4 py-2 rounded-lg bg-pink-500 text-white disabled:opacity-50" onClick={save} disabled={busy}>Gem</button>
+        </div>
+      </div>
+    </div>
   );
 }
