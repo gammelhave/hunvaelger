@@ -1,39 +1,66 @@
+// app/api/upload/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { put } from "@vercel/blob";
 
-export const runtime = "edge"; // hurtig og billig
+export const runtime = "edge";
 
 export async function POST(req: NextRequest) {
-  try {
-    const form = await req.formData();
-    const files = form.getAll("files") as File[];
+  const formData = await req.formData();
 
-    if (!files || files.length === 0) {
-      return NextResponse.json({ error: "Ingen filer modtaget" }, { status: 400 });
-    }
-    if (files.length > 3) {
-      return NextResponse.json({ error: "Max 3 billeder" }, { status: 400 });
-    }
+  // Saml alle mulige feltnavne/varianter
+  const files: File[] = [
+    ...((formData.getAll("file") as File[]) || []),
+    ...((formData.getAll("files") as File[]) || []),
+    ...((formData.getAll("image") as File[]) || []),
+    ...((formData.getAll("photo") as File[]) || []),
+  ];
 
-    // upload hver fil til Blob
-    const urls: string[] = [];
-    for (const file of files) {
-      const ext = (file.name?.split(".").pop() || "jpg").toLowerCase();
-      const key = `profiles/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
+  // Hvis ingen arrays gav noget, prøv single keys
+  const single =
+    (formData.get("file") as File | null) ??
+    (formData.get("image") as File | null) ??
+    (formData.get("photo") as File | null);
 
-      const blob = await put(key, file, {
-        access: "public", // så URL kan vises direkte på /p
-        contentType: file.type || "image/jpeg",
-      });
+  if (single) files.push(single);
 
-      urls.push(blob.url);
-    }
-
-    return NextResponse.json({ ok: true, urls });
-  } catch (e: any) {
-    return NextResponse.json(
-      { error: e?.message ?? "Upload fejl" },
-      { status: 500 }
-    );
+  if (!files.length) {
+    return NextResponse.json({ ok: false, error: "Ingen filer modtaget" }, { status: 400 });
   }
+
+  // (valgfrit) størrelse/typetjek
+  for (const f of files) {
+    if (f.size > 5 * 1024 * 1024) {
+      return NextResponse.json({ ok: false, error: "Max 5 MB pr. fil" }, { status: 400 });
+    }
+  }
+
+  // Upload alle, returnér én eller flere URLs
+  const uploads = await Promise.all(
+    files.map((f) => {
+      const safe = f.name?.replace(/[^a-zA-Z0-9.\-_]/g, "_") || "upload";
+      const pathname = `profiles/${crypto.randomUUID()}-${safe}`;
+      return put(pathname, f, {
+        access: "public",
+        token: process.env.BLOB_READ_WRITE_TOKEN,
+        addRandomSuffix: false,
+      });
+    })
+  );
+
+  // Hvis der normalt kun forventes én fil, kan klienten læse uploads[0].url
+  if (uploads.length === 1) {
+    const b = uploads[0];
+    return NextResponse.json({ ok: true, url: b.url, pathname: b.pathname, size: b.size, contentType: b.contentType });
+  }
+
+  // Ellers returnér alle
+  return NextResponse.json({
+    ok: true,
+    files: uploads.map((b) => ({
+      url: b.url,
+      pathname: b.pathname,
+      size: b.size,
+      contentType: b.contentType,
+    })),
+  });
 }
