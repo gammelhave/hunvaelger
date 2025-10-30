@@ -50,10 +50,26 @@ export default function AdminPage() {
   async function uploadOne(f: File): Promise<string> {
     const fd = new FormData();
     fd.append("file", f);
+
     const r = await fetch("/api/upload", { method: "POST", body: fd });
-    const j = await r.json();
-    if (!r.ok || !j?.ok || !j?.url) throw new Error(j?.error || "Upload fejlede");
-    return j.url as string;
+    const ct = r.headers.get("content-type") || "";
+    let payload: any = null;
+
+    try {
+      payload = ct.includes("application/json") ? await r.json() : await r.text();
+    } catch {
+      payload = await r.text().catch(() => "");
+    }
+
+    if (!r.ok) {
+      const msg =
+        (typeof payload === "string" && payload) || (payload?.error as string) || "Upload fejlede";
+      throw new Error(msg);
+    }
+
+    const url = payload?.url || payload?.files?.[0]?.url;
+    if (!url) throw new Error("Upload svarede uden URL");
+    return url as string;
   }
 
   async function handleCreate(e: React.FormEvent) {
@@ -83,7 +99,10 @@ export default function AdminPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
       });
-      const j = await r.json();
+
+      const ct = r.headers.get("content-type") || "";
+      const j = ct.includes("application/json") ? await r.json() : { ok: r.ok };
+
       if (!r.ok || !j?.ok) throw new Error(j?.error || "Kunne ikke oprette profil");
 
       // 3) Reset + reload
@@ -111,7 +130,8 @@ export default function AdminPage() {
           body: JSON.stringify({ id }),
         });
       }
-      const j = await r.json().catch(() => ({}));
+      const ct = r.headers.get("content-type") || "";
+      const j = ct.includes("application/json") ? await r.json() : { ok: r.ok };
       if (!r.ok || j?.ok === false) throw new Error(j?.error || "Kunne ikke slette");
       await load();
     } catch (e: any) {
@@ -203,18 +223,14 @@ export default function AdminPage() {
             {profiles.map((p) => (
               <article key={p.id} className="border rounded-2xl p-4 space-y-2 bg-white/70">
                 <div className="flex items-start justify-between gap-2">
-                  <div className="font-semibold">{p.name}, {p.age}</div>
+                  <div className="font-semibold">
+                    {p.name}, {p.age}
+                  </div>
                   <div className="flex gap-2">
-                    <button
-                      className="px-3 py-1 rounded border"
-                      onClick={() => setEditing(p)}
-                    >
+                    <button className="px-3 py-1 rounded border" onClick={() => setEditing(p)}>
                       Rediger
                     </button>
-                    <button
-                      className="px-3 py-1 rounded border"
-                      onClick={() => handleDelete(p.id)}
-                    >
+                    <button className="px-3 py-1 rounded border" onClick={() => handleDelete(p.id)}>
                       Slet
                     </button>
                   </div>
@@ -275,10 +291,26 @@ function EditProfileDialog({
   async function uploadOne(f: File): Promise<string> {
     const fd = new FormData();
     fd.append("file", f);
+
     const r = await fetch("/api/upload", { method: "POST", body: fd });
-    const j = await r.json();
-    if (!r.ok || !j?.ok || !j?.url) throw new Error(j?.error || "Upload fejlede");
-    return j.url as string;
+    const ct = r.headers.get("content-type") || "";
+    let payload: any = null;
+
+    try {
+      payload = ct.includes("application/json") ? await r.json() : await r.text();
+    } catch {
+      payload = await r.text().catch(() => "");
+    }
+
+    if (!r.ok) {
+      const msg =
+        (typeof payload === "string" && payload) || (payload?.error as string) || "Upload fejlede";
+      throw new Error(msg);
+    }
+
+    const url = payload?.url || payload?.files?.[0]?.url;
+    if (!url) throw new Error("Upload svarede uden URL");
+    return url as string;
   }
 
   async function handleAddFiles(files: FileList | null) {
@@ -321,9 +353,26 @@ function EditProfileDialog({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
       });
-      const j = await r.json();
-      if (!r.ok || !j?.ok) throw new Error(j?.error || "Kunne ikke gemme");
-      onSaved(j.profile as Profile);
+
+      const ct = r.headers.get("content-type") || "";
+      let payload: any = null;
+      try {
+        payload = ct.includes("application/json") ? await r.json() : await r.text();
+      } catch {
+        payload = await r.text().catch(() => "");
+      }
+
+      if (!r.ok) {
+        const msg =
+          (typeof payload === "string" && payload) ||
+          (payload?.error as string) ||
+          "Kunne ikke gemme";
+        throw new Error(msg);
+      }
+
+      const updated = (typeof payload === "string" ? null : payload?.profile) as Profile | null;
+      if (!updated) throw new Error("Serveren returnerede ingen profil");
+      onSaved(updated);
     } catch (e: any) {
       setErr(e.message || "Ukendt fejl");
     } finally {
@@ -336,7 +385,9 @@ function EditProfileDialog({
       <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl p-6 space-y-4">
         <div className="flex items-center justify-between">
           <h2 className="text-xl font-semibold">Rediger profil</h2>
-          <button className="px-3 py-1 rounded border" onClick={onClose} disabled={busy}>Luk</button>
+          <button className="px-3 py-1 rounded border" onClick={onClose} disabled={busy}>
+            Luk
+          </button>
         </div>
 
         <div className="grid md:grid-cols-2 gap-4">
@@ -396,8 +447,12 @@ function EditProfileDialog({
         {err && <div className="text-sm text-red-600">{err}</div>}
 
         <div className="flex justify-end gap-2">
-          <button className="px-4 py-2 rounded-lg border" onClick={onClose} disabled={busy}>Annullér</button>
-          <button className="px-4 py-2 rounded-lg bg-pink-500 text-white disabled:opacity-50" onClick={save} disabled={busy}>Gem</button>
+          <button className="px-4 py-2 rounded-lg border" onClick={onClose} disabled={busy}>
+            Annullér
+          </button>
+          <button className="px-4 py-2 rounded-lg bg-pink-500 text-white disabled:opacity-50" onClick={save} disabled={busy}>
+            Gem
+          </button>
         </div>
       </div>
     </div>
