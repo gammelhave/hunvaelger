@@ -263,7 +263,9 @@ export default function AdminPage() {
           profile={editing}
           onClose={() => setEditing(null)}
           onSaved={(upd) => {
-            setProfiles((prev) => prev.map((x) => (x.id === upd.id ? upd : x)));
+            setProfiles((prev) =>
+              prev.map((x) => ((x.id || x.name + "_" + x.age) === (upd.id || upd.name + "_" + upd.age) ? upd : x))
+            );
             setEditing(null);
           }}
         />
@@ -343,15 +345,14 @@ function EditProfileDialog({
     setBusy(true);
     setErr(null);
     try {
-      const body = {
+      const targetId = profile.id || String(Date.now()); // <- vigtigt!
+      const body: Profile = {
+        id: targetId, // <- send id i body også
         name: name.trim(),
         age: Number(age || 0),
         bio: bio.trim(),
         images,
       };
-
-      // VIGTIGT: brug eksisterende id – ellers lav et nyt stabilt id
-      const targetId = profile.id || String(Date.now());
 
       const r = await fetch(`/api/profiles/${targetId}`, {
         method: "PUT",
@@ -428,23 +429,23 @@ function EditProfileDialog({
             />
           </div>
 
-          {images.length > 0 && (
-            <div className="grid grid-cols-3 gap-3">
-              {images.map((url) => (
-                <div key={url} className="relative group">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={url} alt="" className="w-full h-28 object-cover rounded-lg border" />
-                  <button
-                    type="button"
-                    onClick={() => removeImage(url)}
-                    className="absolute top-1 right-1 bg-white/90 border rounded px-2 py-1 text-xs opacity-0 group-hover:opacity-100 transition"
-                  >
-                    Fjern
-                  </button>
-                </div>
-              ))}
-            </div>
-          )}
+        {images.length > 0 && (
+          <div className="grid grid-cols-3 gap-3">
+            {images.map((url) => (
+              <div key={url} className="relative group">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={url} alt="" className="w-full h-28 object-cover rounded-lg border" />
+                <button
+                  type="button"
+                  onClick={() => removeImage(url)}
+                  className="absolute top-1 right-1 bg-white/90 border rounded px-2 py-1 text-xs opacity-0 group-hover:opacity-100 transition"
+                >
+                  Fjern
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
 
           <p className="text-xs text-gray-500">Anbefaling: JPG/PNG, &lt; 5 MB pr. fil.</p>
         </div>
