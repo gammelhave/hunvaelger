@@ -2,18 +2,17 @@ import { NextRequest, NextResponse } from "next/server";
 import { kv } from "@vercel/kv";
 
 type Profile = {
-  id: string;
+  id?: string;
   name: string;
   age: number;
   bio: string;
   images?: string[];
 };
 
-function jsonErr(msg: string, status = 400) {
+function jerr(msg: string, status = 400) {
   return NextResponse.json({ ok: false, error: msg }, { status });
 }
 
-// --- helpers ---
 function parseList(s: string | null): Profile[] | null {
   if (!s) return null;
   try {
@@ -29,7 +28,6 @@ async function tryHGet(id: string): Promise<Profile | null> {
     const raw = await kv.hget<string>("profiles", id);
     return raw ? (JSON.parse(raw) as Profile) : null;
   } catch {
-    // WRONGTYPE eller andet -> behandl som ikke-eksisterende i hash
     return null;
   }
 }
@@ -57,7 +55,7 @@ export async function GET(_: NextRequest, { params }: { params: { id: string } }
   try {
     const { id } = params;
 
-    // 1) Prøv JSON-array i key "profiles"
+    // 1) JSON-array
     const listStr = await kv.get<string>("profiles").catch(() => null);
     const list = parseList(listStr);
     if (list) {
@@ -65,13 +63,13 @@ export async function GET(_: NextRequest, { params }: { params: { id: string } }
       if (found) return NextResponse.json({ ok: true, profile: found });
     }
 
-    // 2) Fallback: hash "profiles"
+    // 2) Hash
     const fromHash = await tryHGet(id);
     if (fromHash) return NextResponse.json({ ok: true, profile: fromHash });
 
-    return jsonErr("Not found", 404);
+    return jerr("Not found", 404);
   } catch (e: any) {
-    return jsonErr(e?.message || "Server error (GET)", 500);
+    return jerr(e?.message || "Server error (GET)", 500);
   }
 }
 
@@ -83,60 +81,82 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
     try {
       body = await req.json();
     } catch {
-      return jsonErr("Body skal være JSON", 400);
+      return jerr("Body skal være JSON", 400);
     }
 
+    // validate images
     if (body.images) {
-      if (!Array.isArray(body.images)) return jsonErr("images must be an array", 400);
-      if (body.images.length > 3) return jsonErr("Max 3 billeder", 400);
+      if (!Array.isArray(body.images)) return jerr("images must be an array", 400);
+      if (body.images.length > 3) return jerr("Max 3 billeder", 400);
       body.images = body.images.map(String);
     }
 
-    // 1) Prøv JSON-array modellen
+    // 1) JSON-array (primær lagring)
     const listStr = await kv.get<string>("profiles").catch(() => null);
     const list = parseList(listStr);
     if (list) {
-      const idx = list.findIndex((p) => p.id === id);
-      if (idx === -1) return jsonErr("Not found", 404);
-      const next: Profile = { ...list[idx], ...body, id: list[idx].id };
+      // prøv via id
+      let idx = list.findIndex((p) => p.id === id);
+
+      // hvis ikke findes, prøv match via (name+age) og uddel id
+      if (idx === -1 && (body.name || body.age !== undefined)) {
+        idx = list.findIndex(
+          (p) =>
+            p.name?.trim() === (body.name ?? p.name)?.trim() &&
+            Number(p.age) === Number(body.age ?? p.age)
+        );
+        if (idx !== -1 && !list[idx].id) {
+          list[idx].id = id; // stabiliser fremadrettet
+        }
+      }
+
+      if (idx === -1) return jerr("Not found", 404);
+
+      const merged: Profile = {
+        ...list[idx],
+        ...body,
+        id: list[idx].id ?? id,
+      };
+
       const newList = [...list];
-      newList[idx] = next;
+      newList[idx] = merged;
+
       await kv.set("profiles", JSON.stringify(newList));
-      return NextResponse.json({ ok: true, profile: next });
+      return NextResponse.json({ ok: true, profile: merged });
     }
 
-    // 2) Fallback: hash-modellen
+    // 2) Hash fallback
     const current = await tryHGet(id);
-    if (!current) return jsonErr("Not found", 404);
-    const next: Profile = { ...current, ...body, id: current.id };
-    const ok = await tryHSet(id, next);
-    if (!ok) return jsonErr("Kunne ikke gemme (hash)", 500);
-    return NextResponse.json({ ok: true, profile: next });
+    if (!current) return jerr("Not found", 404);
+
+    const merged: Profile = { ...current, ...body, id: current.id ?? id };
+    const ok = await tryHSet(merged.id!, merged);
+    if (!ok) return jerr("Kunne ikke gemme (hash)", 500);
+
+    return NextResponse.json({ ok: true, profile: merged });
   } catch (e: any) {
-    return jsonErr(e?.message || "Server error (PUT)", 500);
+    return jerr(e?.message || "Server error (PUT)", 500);
   }
 }
 
-// DELETE /api/profiles/:id
+// DELETE (valgfri)
 export async function DELETE(_: NextRequest, { params }: { params: { id: string } }) {
   try {
     const { id } = params;
 
-    // 1) JSON-array
     const listStr = await kv.get<string>("profiles").catch(() => null);
     const list = parseList(listStr);
     if (list) {
       const newList = list.filter((p) => p.id !== id);
-      if (newList.length === list.length) return jsonErr("Not found", 404);
+      if (newList.length === list.length) return jerr("Not found", 404);
       await kv.set("profiles", JSON.stringify(newList));
       return NextResponse.json({ ok: true });
     }
 
-    // 2) Hash
     const ok = await tryHDel(id);
-    if (!ok) return jsonErr("Not found", 404);
+    if (!ok) return jerr("Not found", 404);
     return NextResponse.json({ ok: true });
   } catch (e: any) {
-    return jsonErr(e?.message || "Server error (DELETE)", 500);
+    return jerr(e?.message || "Server error (DELETE)", 500);
   }
 }
