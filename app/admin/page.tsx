@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 
 /** ---------- Typer ---------- */
 type Profile = {
-  id: string;
+  id?: string;
   name: string;
   age: number;
   bio: string;
@@ -116,7 +116,8 @@ export default function AdminPage() {
     }
   }
 
-  async function handleDelete(id: string) {
+  async function handleDelete(id?: string) {
+    if (!id) return;
     if (!confirm("Slet profilen?")) return;
     setErr(null);
     try {
@@ -221,7 +222,7 @@ export default function AdminPage() {
         ) : (
           <div className="grid md:grid-cols-2 gap-4">
             {profiles.map((p) => (
-              <article key={p.id} className="border rounded-2xl p-4 space-y-2 bg-white/70">
+              <article key={(p.id || p.name + "_" + p.age)} className="border rounded-2xl p-4 space-y-2 bg-white/70">
                 <div className="flex items-start justify-between gap-2">
                   <div className="font-semibold">
                     {p.name}, {p.age}
@@ -348,7 +349,11 @@ function EditProfileDialog({
         bio: bio.trim(),
         images,
       };
-      const r = await fetch(`/api/profiles/${profile.id}`, {
+
+      // VIGTIGT: brug eksisterende id – ellers lav et nyt stabilt id
+      const targetId = profile.id || String(Date.now());
+
+      const r = await fetch(`/api/profiles/${targetId}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
