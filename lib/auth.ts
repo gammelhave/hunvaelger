@@ -1,42 +1,68 @@
-import { kv } from "./kv";
+// lib/auth.ts
+import { kv } from "@/lib/kv";
 import bcrypt from "bcryptjs";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/app/api/auth/[...nextauth]/auth-options";
 
-export type User = {
-  id: string;
+/**
+ * Brugerdata gemmes i Upstash KV under nøglen "users"
+ * Format:
+ * [
+ *   { email: string, passwordHash: string, gender: "female" | "male", name: string }
+ * ]
+ */
+
+type User = {
   email: string;
-  role: "woman" | "man";
   passwordHash: string;
-  createdAt: number;
+  gender: "female" | "male";
+  name: string;
 };
 
-export async function findUserByEmail(email: string): Promise<User | null> {
-  const u = await kv.get<User>(`users:${email.toLowerCase()}`);
-  return u || null;
+const USERS_KEY = "users";
+
+/** Hent alle brugere */
+export async function readUsers(): Promise<User[]> {
+  const data = await kv.get<string>(USERS_KEY);
+  if (!data) return [];
+  try {
+    return JSON.parse(data) as User[];
+  } catch {
+    return [];
+  }
 }
 
-export async function createUser(email: string, password: string, role: "woman" | "man") {
+/** Gem hele listen af brugere */
+export async function saveUsers(list: User[]) {
+  await kv.set(USERS_KEY, JSON.stringify(list));
+}
+
+/** Find bruger ud fra email */
+export async function getUserByEmail(email: string): Promise<User | null> {
+  const users = await readUsers();
+  return users.find((u) => u.email === email) || null;
+}
+
+/** Opret en ny kvinde-bruger (kun kvinder kan oprette profiler) */
+export async function createUser(
+  email: string,
+  password: string,
+  name: string
+): Promise<User> {
+  const users = await readUsers();
+  const existing = users.find((u) => u.email === email);
+  if (existing) throw new Error("Bruger findes allerede");
+
   const passwordHash = await bcrypt.hash(password, 10);
-  const user: User = {
-    id: crypto.randomUUID(),
-    email: email.toLowerCase(),
-    role,
-    passwordHash,
-    createdAt: Date.now(),
-  };
-  await kv.set(`users:${user.email}`, user);
-  return user;
+  const newUser: User = { email, passwordHash, gender: "female", name };
+  users.push(newUser);
+  await saveUsers(users);
+  return newUser;
 }
 
-export async function verifyPassword(password: string, hash: string) {
-  return bcrypt.compare(password, hash);
-}
+/** Valider login (returnerer bruger hvis korrekt) */
+export async function verifyUser(email: string, password: string): Promise<User | null> {
+  const user = await getUserByEmail(email);
+  if (!user) return null;
 
-export async function requireWomanSession() {
-  const session = await getServerSession(authOptions);
-  if (!session?.user?.email) return { ok: false as const, error: "UNAUTHENTICATED" };
-  const u = await findUserByEmail(session.user.email);
-  if (!u || u.role !== "woman") return { ok: false as const, error: "FORBIDDEN" };
-  return { ok: true as const, user: u };
+  const ok = await bcrypt.compare(password, user.passwordHash);
+  return ok ? user : null;
 }
