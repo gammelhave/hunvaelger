@@ -1,20 +1,36 @@
 {
   "compilerOptions": {
-    "target": "ES2020",
-    "lib": ["ES2020", "DOM", "DOM.Iterable"],
-    "module": "ESNext",
-    "moduleResolution": "Bundler",
-    "jsx": "preserve",
+    /* === Grundlæggende opsætning === */
+    "target": "esnext",
+    "lib": ["dom", "dom.iterable", "esnext"],
     "allowJs": true,
+    "skipLibCheck": true,
     "strict": true,
+    "forceConsistentCasingInFileNames": true,
     "noEmit": true,
     "esModuleInterop": true,
-    "forceConsistentCasingInFileNames": true,
-    "skipLibCheck": true,
+    "module": "esnext",
+    "moduleResolution": "bundler",
     "resolveJsonModule": true,
-    "types": ["node"],
+    "isolatedModules": true,
+    "jsx": "preserve",
+
+    /* === Sti-aliaser (vigtigt) === */
     "baseUrl": ".",
-    "paths": { "@/*": ["*"] }
+    "paths": {
+      "@/*": ["*"]
+    },
+
+    /* === Types til Next.js === */
+    "types": ["node", "next", "next/types/global"]
   },
-  "include": ["app", "components", "pages", "next-env.d.ts"]
+  "include": [
+    "next-env.d.ts",
+    "**/*.ts",
+    "**/*.tsx",
+    ".next/types/**/*.ts"
+  ],
+  "exclude": [
+    "node_modules"
+  ]
 }
