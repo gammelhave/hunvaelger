@@ -1,122 +1,74 @@
 // app/api/profiles/[id]/route.ts
 import { NextRequest, NextResponse } from "next/server";
-import { kv } from "@/lib/kv";
-import { requireWomanSession } from "@/lib/auth";
+import { getServerSession } from "next-auth";
+import { authOptions } from "../../auth/[...nextauth]/auth-options";
+import { readProfiles, saveProfiles } from "@/lib/db-kv";
+import { Profile } from "@/lib/db-kv";
 
-type Profile = {
-  id: string;
-  userId: string;
-  name: string;
-  age: number;
-  bio: string;
-  images?: string[];
-  slug: string;
-};
+/**
+ * GET  - offentlig adgang (QR-link)
+ * PUT  - kun profil-ejer
+ * DELETE - kun profil-ejer
+ */
 
-async function loadList(): Promise<Profile[]> {
-  try {
-    const raw = await kv.get<string>("profiles");
-    if (!raw) return [];
-    const list = JSON.parse(raw);
-    return Array.isArray(list) ? (list as Profile[]) : [];
-  } catch {
-    return [];
+export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
+  const list = await readProfiles();
+  const profile = list.find((p) => p.id === params.id);
+
+  if (!profile) {
+    return NextResponse.json({ ok: false, error: "Profil ikke fundet" }, { status: 404 });
   }
-}
 
-async function saveList(list: Profile[]) {
-  await kv.set("profiles", JSON.stringify(list));
-}
-
-function sanitizeImages(images: any): string[] | undefined {
-  if (!images) return undefined;
-  if (!Array.isArray(images)) return undefined;
-  return images.slice(0, 3).map(String);
+  return NextResponse.json({ ok: true, profile });
 }
 
 export async function PUT(req: NextRequest, { params }: { params: { id: string } }) {
-  const guard = await requireWomanSession();
-  if (!guard.ok) {
-    return NextResponse.json(
-      { ok: false, error: guard.error },
-      { status: guard.error === "UNAUTHENTICATED" ? 401 : 403 }
-    );
+  const session = await getServerSession(authOptions);
+
+  if (!session) {
+    return NextResponse.json({ ok: false, error: "Login kræves" }, { status: 401 });
   }
 
-  try {
-    const id = params.id;
-    const body = await req.json();
+  const list = await readProfiles();
+  const index = list.findIndex((p) => p.id === params.id);
 
-    const list = await loadList();
-    const idx = list.findIndex((p) => p.id === id);
-    if (idx === -1) {
-      return NextResponse.json({ ok: false, error: "Not found" }, { status: 404 });
-    }
-    // ejer-check
-    if (list[idx].userId !== guard.user.id) {
-      return NextResponse.json({ ok: false, error: "FORBIDDEN" }, { status: 403 });
-    }
-
-    // Kun tillad redigering af disse felter
-    const next = { ...list[idx] };
-
-    if (typeof body.name === "string") next.name = body.name.trim();
-    if (body.age !== undefined) next.age = Number(body.age);
-    if (typeof body.bio === "string") next.bio = body.bio;
-    const imgs = sanitizeImages(body.images);
-    if (imgs) next.images = imgs;
-
-    // Valgfri: regenerér slug på opfordring
-    if (body?.regenerateSlug === true) {
-      const base = String(next.name)
-        .toLowerCase()
-        .replace(/[^a-z0-9]+/g, "-")
-        .replace(/^-+|-+$/g, "");
-      next.slug = `${base || "profil"}-${Number(next.age) || 0}-${Math.random()
-        .toString(36)
-        .slice(2, 8)}`;
-    }
-
-    list[idx] = next;
-    await saveList(list);
-
-    return NextResponse.json({ ok: true, profile: next });
-  } catch (e: any) {
-    return NextResponse.json(
-      { ok: false, error: e?.message || "Serverfejl" },
-      { status: 500 }
-    );
+  if (index === -1) {
+    return NextResponse.json({ ok: false, error: "Profil ikke fundet" }, { status: 404 });
   }
+
+  const profile = list[index];
+  if (profile.userId !== session.user.email) {
+    return NextResponse.json({ ok: false, error: "Ingen adgang" }, { status: 403 });
+  }
+
+  const body = await req.json();
+  const updated: Profile = { ...profile, ...body };
+  list[index] = updated;
+  await saveProfiles(list);
+
+  return NextResponse.json({ ok: true, profile: updated });
 }
 
-export async function DELETE(_: NextRequest, { params }: { params: { id: string } }) {
-  const guard = await requireWomanSession();
-  if (!guard.ok) {
-    return NextResponse.json(
-      { ok: false, error: guard.error },
-      { status: guard.error === "UNAUTHENTICATED" ? 401 : 403 }
-    );
+export async function DELETE(req: NextRequest, { params }: { params: { id: string } }) {
+  const session = await getServerSession(authOptions);
+
+  if (!session) {
+    return NextResponse.json({ ok: false, error: "Login kræves" }, { status: 401 });
   }
 
-  try {
-    const id = params.id;
-    const list = await loadList();
-    const idx = list.findIndex((p) => p.id === id);
-    if (idx === -1) {
-      return NextResponse.json({ ok: false, error: "Not found" }, { status: 404 });
-    }
-    // ejer-check
-    if (list[idx].userId !== guard.user.id) {
-      return NextResponse.json({ ok: false, error: "FORBIDDEN" }, { status: 403 });
-    }
+  const list = await readProfiles();
+  const profile = list.find((p) => p.id === params.id);
 
-    const [removed] = list.splice(idx, 1);
-    await saveList(list);
-    return NextResponse.json({ ok: true, removedId: removed.id });
-  } catch (e: any) {
-    return NextResponse.json(
-      { ok: false, error: e?.message || "Serverfejl" },
-      { status: 500 }
-    );
+  if (!profile) {
+    return NextResponse.json({ ok: false, error: "Profil ikke fundet" }, { status: 404 });
   }
+
+  if (profile.userId !== session.user.email) {
+    return NextResponse.json({ ok: false, error: "Ingen adgang" }, { status: 403 });
+  }
+
+  const updatedList = list.filter((p) => p.id !== params.id);
+  await saveProfiles(updatedList);
+
+  return NextResponse.json({ ok: true, message: "Profil slettet" });
 }
