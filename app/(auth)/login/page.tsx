@@ -1,10 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { Suspense, useState } from "react";
 import { signIn } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
 
-export default function LoginPage() {
+function LoginForm() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
@@ -21,22 +21,21 @@ export default function LoginPage() {
       const res = await signIn("credentials", {
         email,
         password,
-        redirect: false
+        redirect: false,
       });
-
       if (!res) {
         setMsg("Uventet svar fra serveren.");
         return;
       }
-
       if (res.error) {
-        // NextAuth returnerer fx "CredentialsSignin" ved forkert login
-        setMsg(res.error === "CredentialsSignin" ? "Forkert email eller adgangskode." : res.error);
+        setMsg(
+          res.error === "CredentialsSignin"
+            ? "Forkert email eller adgangskode."
+            : res.error
+        );
         return;
       }
-
-      // success
-      router.replace("/admin"); // eller "/min-profil"
+      router.replace("/admin"); // skift evt. til /min-profil
     } catch (err: any) {
       setMsg(err?.message || "Der opstod en fejl.");
     } finally {
@@ -50,7 +49,10 @@ export default function LoginPage() {
 
       {(urlErr || msg) && (
         <div className="text-sm text-red-600 border border-red-200 bg-red-50 p-2 rounded">
-          {msg || (urlErr === "CredentialsSignin" ? "Forkert email eller adgangskode." : urlErr)}
+          {msg ||
+            (urlErr === "CredentialsSignin"
+              ? "Forkert email eller adgangskode."
+              : urlErr)}
         </div>
       )}
 
@@ -64,8 +66,8 @@ export default function LoginPage() {
           onChange={(e) => setEmail(e.target.value)}
           required
         />
-        <input
           className="w-full border rounded p-2"
+        <input
           type="password"
           placeholder="Adgangskode"
           autoComplete="current-password"
@@ -82,8 +84,21 @@ export default function LoginPage() {
       </form>
 
       <p className="text-sm text-gray-500">
-        Har du ingen bruger? Opret via <a className="underline" href="/signup">/signup</a>.
+        Har du ingen bruger? Opret via{" "}
+        <a className="underline" href="/signup">
+          /signup
+        </a>
+        .
       </p>
     </div>
+  );
+}
+
+export default function LoginPage() {
+  // Suspense er påkrævet når man bruger useSearchParams i en client-komponent
+  return (
+    <Suspense fallback={<div className="max-w-md mx-auto p-6">Indlæser…</div>}>
+      <LoginForm />
+    </Suspense>
   );
 }
