@@ -1,93 +1,60 @@
 // app/api/profiles/route.ts
-import { NextRequest, NextResponse } from "next/server";
-import { kv } from "@/lib/kv";
-import { requireWomanSession } from "@/lib/auth";
+import { NextResponse } from "next/server";
+import { getServerSession } from "next-auth";
+import { authOptions } from "../auth/[...nextauth]/auth-options";
+import { readProfiles, saveProfiles } from "@/lib/db-kv";
+import { Profile } from "@/lib/db-kv";
 
-type Profile = {
-  id: string;
-  userId: string;
-  name: string;
-  age: number;
-  bio: string;
-  images?: string[];
-  slug: string; // QR-slug
-};
-
-function makeSlug(name: string, age: number) {
-  const base = String(name)
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "");
-  return `${base || "profil"}-${Number(age) || 0}-${Math.random()
-    .toString(36)
-    .slice(2, 8)}`;
-}
-
-async function loadList(): Promise<Profile[]> {
-  try {
-    const raw = await kv.get<string>("profiles");
-    if (!raw) return [];
-    const list = JSON.parse(raw);
-    return Array.isArray(list) ? (list as Profile[]) : [];
-  } catch {
-    return [];
-  }
-}
-
-async function saveList(list: Profile[]) {
-  await kv.set("profiles", JSON.stringify(list));
-}
-
+/**
+ * GET = kun for admin (valgfrit)
+ * POST = opret ny profil (kun for kvinder/logget ind)
+ */
 export async function GET() {
-  const list = await loadList();
-  return NextResponse.json({ ok: true, profiles: list });
+  try {
+    const profiles = await readProfiles();
+    return NextResponse.json({ ok: true, profiles });
+  } catch (err) {
+    console.error("Fejl i GET /api/profiles:", err);
+    return NextResponse.json({ ok: false, error: "Kunne ikke hente profiler" }, { status: 500 });
+  }
 }
 
-export async function POST(req: NextRequest) {
-  const guard = await requireWomanSession();
-  if (!guard.ok) {
-    return NextResponse.json(
-      { ok: false, error: guard.error },
-      { status: guard.error === "UNAUTHENTICATED" ? 401 : 403 }
-    );
+export async function POST(req: Request) {
+  const session = await getServerSession(authOptions);
+
+  if (!session) {
+    return NextResponse.json({ ok: false, error: "Login kræves" }, { status: 401 });
   }
+
+  // Du kan evt. tjekke om brugeren er "kvinde"
+  // fx if (session.user.gender !== "female") return 403;
 
   try {
     const body = await req.json();
-    const name = String(body?.name ?? "").trim();
-    const age = Number(body?.age ?? 0);
-    const bio = String(body?.bio ?? "");
-    const images: string[] = Array.isArray(body?.images)
-      ? body.images.slice(0, 3).map(String)
-      : [];
+    const { name, age, bio, images, slug } = body;
 
-    if (!name || !age) {
-      return NextResponse.json(
-        { ok: false, error: "Navn og alder er påkrævet" },
-        { status: 400 }
-      );
+    if (!name || !age || !bio) {
+      return NextResponse.json({ ok: false, error: "Manglende felter" }, { status: 400 });
     }
 
-    const list = await loadList();
+    const list = await readProfiles();
 
-    const profile: Profile = {
-      id: crypto.randomUUID(),
-      userId: guard.user.id,
+    const newProfile: Profile = {
+      id: Date.now().toString(),
+      userId: session.user.email ?? "unknown",
       name,
       age,
       bio,
-      images,
-      slug: makeSlug(name, age),
+      images: images ?? [],
+      slug: slug ?? name.toLowerCase().replace(/\s+/g, "-"),
     };
 
-    list.push(profile);
-    await saveList(list);
+    list.push(newProfile);
+    await saveProfiles(list);
 
-    return NextResponse.json({ ok: true, profile });
-  } catch (e: any) {
-    return NextResponse.json(
-      { ok: false, error: e?.message || "Serverfejl" },
-      { status: 500 }
-    );
+    return NextResponse.json({ ok: true, profile: newProfile });
+  } catch (err) {
+    console.error("Fejl i POST /api/profiles:", err);
+    return NextResponse.json({ ok: false, error: "Kunne ikke oprette profil" }, { status: 500 });
   }
 }
