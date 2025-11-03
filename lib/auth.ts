@@ -1,7 +1,5 @@
-// lib/auth.ts
 import { kv } from "./kv";
 import bcrypt from "bcryptjs";
-import type { NextRequest } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/auth-options";
 
@@ -17,7 +15,8 @@ export async function findUserByEmail(email: string): Promise<User | null> {
   const u = await kv.get<User>(`users:${email.toLowerCase()}`);
   return u || null;
 }
-export async function createUser(email: string, password: string, role: "woman"|"man") {
+
+export async function createUser(email: string, password: string, role: "woman" | "man") {
   const passwordHash = await bcrypt.hash(password, 10);
   const user: User = {
     id: crypto.randomUUID(),
@@ -29,20 +28,15 @@ export async function createUser(email: string, password: string, role: "woman"|
   await kv.set(`users:${user.email}`, user);
   return user;
 }
+
 export async function verifyPassword(password: string, hash: string) {
   return bcrypt.compare(password, hash);
 }
 
-// server-side guard
 export async function requireWomanSession() {
   const session = await getServerSession(authOptions);
-  if (!session?.user?.email) return { ok:false as const, error:"UNAUTHENTICATED" };
+  if (!session?.user?.email) return { ok: false as const, error: "UNAUTHENTICATED" };
   const u = await findUserByEmail(session.user.email);
-  if (!u || u.role !== "woman") return { ok:false as const, error:"FORBIDDEN" };
-  return { ok:true as const, user:u };
-}
-export async function getSessionUser() {
-  const session = await getServerSession(authOptions);
-  if (!session?.user?.email) return null;
-  return await findUserByEmail(session.user.email);
+  if (!u || u.role !== "woman") return { ok: false as const, error: "FORBIDDEN" };
+  return { ok: true as const, user: u };
 }
