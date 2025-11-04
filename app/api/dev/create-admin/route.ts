@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
+// Brug alias hvis du har "@/*" sat op i tsconfig/jsconfig, ellers skift til relativ sti:
+// import { prisma } from "../../../lib/prisma";
 import { prisma } from "@/lib/prisma";
 
 export async function POST(req: Request) {
