@@ -1,24 +1,7 @@
 {
   "compilerOptions": {
-<<<<<<< HEAD
     "target": "ES2022",
-=======
-<<<<<<< HEAD
-    /* === Grundlæggende opsætning === */
-    "target": "esnext",
->>>>>>> 4a4117d (Auth/DB: add Prisma schema+migrations, lib/prisma, create-admin route; remove duplicate .jsx pages; jsconfig alias)
     "lib": ["dom", "dom.iterable", "esnext"],
-=======
-    "target": "ES2020",
-    "lib": [
-      "ES2020",
-      "DOM",
-      "DOM.Iterable"
-    ],
-    "module": "ESNext",
-    "moduleResolution": "Bundler",
-    "jsx": "preserve",
->>>>>>> 9b82aed (Auth/DB: add Prisma schema+migrations, lib/prisma, create-admin route; remove duplicate .jsx pages; jsconfig alias)
     "allowJs": true,
     "skipLibCheck": true,
     "strict": false,
@@ -27,7 +10,6 @@
     "module": "esnext",
     "moduleResolution": "bundler",
     "resolveJsonModule": true,
-<<<<<<< HEAD
     "isolatedModules": true,
     "jsx": "preserve",
     "baseUrl": ".",
@@ -35,42 +17,6 @@
       "@/*": ["*"]
     }
   },
-<<<<<<< HEAD
   "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts"],
   "exclude": ["node_modules"]
-=======
-  "include": [
-    "next-env.d.ts",
-    "**/*.ts",
-    "**/*.tsx",
-=======
-    "types": [
-      "node"
-    ],
-    "baseUrl": ".",
-    "paths": {
-      "@/*": [
-        "*"
-      ]
-    },
-    "incremental": true,
-    "isolatedModules": true,
-    "plugins": [
-      {
-        "name": "next"
-      }
-    ]
-  },
-  "include": [
-    "app",
-    "components",
-    "next-env.d.ts",
-    "pages",
->>>>>>> 9b82aed (Auth/DB: add Prisma schema+migrations, lib/prisma, create-admin route; remove duplicate .jsx pages; jsconfig alias)
-    ".next/types/**/*.ts"
-  ],
-  "exclude": [
-    "node_modules"
-  ]
->>>>>>> 4a4117d (Auth/DB: add Prisma schema+migrations, lib/prisma, create-admin route; remove duplicate .jsx pages; jsconfig alias)
 }
