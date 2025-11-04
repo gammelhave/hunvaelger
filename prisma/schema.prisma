@@ -1,12 +1,39 @@
+<<<<<<< HEAD
+=======
+<<<<<<< HEAD
+// prisma/schema.prisma
+
+=======
+>>>>>>> 9b82aed (Auth/DB: add Prisma schema+migrations, lib/prisma, create-admin route; remove duplicate .jsx pages; jsconfig alias)
+>>>>>>> 4a4117d (Auth/DB: add Prisma schema+migrations, lib/prisma, create-admin route; remove duplicate .jsx pages; jsconfig alias)
 generator client {
   provider = "prisma-client-js"
 }
 
 datasource db {
+<<<<<<< HEAD
+=======
+<<<<<<< HEAD
+  // Lokalt: SQLite (nemt at komme i gang med)
+=======
+>>>>>>> 9b82aed (Auth/DB: add Prisma schema+migrations, lib/prisma, create-admin route; remove duplicate .jsx pages; jsconfig alias)
+>>>>>>> 4a4117d (Auth/DB: add Prisma schema+migrations, lib/prisma, create-admin route; remove duplicate .jsx pages; jsconfig alias)
   provider = "sqlite"
   url      = env("DATABASE_URL")
 }
 
+<<<<<<< HEAD
+=======
+<<<<<<< HEAD
+/*
+  NOTE:
+  - I produktion (Vercel) bør du bruge Postgres/MySQL.
+  - Skift da 'provider' til "postgresql" og sæt en rigtig DATABASE_URL i Vercel.
+*/
+
+=======
+>>>>>>> 9b82aed (Auth/DB: add Prisma schema+migrations, lib/prisma, create-admin route; remove duplicate .jsx pages; jsconfig alias)
+>>>>>>> 4a4117d (Auth/DB: add Prisma schema+migrations, lib/prisma, create-admin route; remove duplicate .jsx pages; jsconfig alias)
 model User {
   id           String   @id @default(cuid())
   email        String   @unique
@@ -14,6 +41,14 @@ model User {
   passwordHash String
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
+<<<<<<< HEAD
+=======
+<<<<<<< HEAD
+
+  // Relation til profil (valgfri – en bruger kan have 0/1 profil)
+=======
+>>>>>>> 9b82aed (Auth/DB: add Prisma schema+migrations, lib/prisma, create-admin route; remove duplicate .jsx pages; jsconfig alias)
+>>>>>>> 4a4117d (Auth/DB: add Prisma schema+migrations, lib/prisma, create-admin route; remove duplicate .jsx pages; jsconfig alias)
   profile      Profile?
 }
 
@@ -24,6 +59,18 @@ model Profile {
   bio       String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+<<<<<<< HEAD
   userId    String?  @unique
   user      User?    @relation(fields: [userId], references: [id])
+=======
+<<<<<<< HEAD
+
+  // Knyt evt. profilen til en bruger (valgfrit)
+  userId String?  @unique
+  user   User?    @relation(fields: [userId], references: [id])
+=======
+  userId    String?  @unique
+  user      User?    @relation(fields: [userId], references: [id])
+>>>>>>> 9b82aed (Auth/DB: add Prisma schema+migrations, lib/prisma, create-admin route; remove duplicate .jsx pages; jsconfig alias)
+>>>>>>> 4a4117d (Auth/DB: add Prisma schema+migrations, lib/prisma, create-admin route; remove duplicate .jsx pages; jsconfig alias)
 }
