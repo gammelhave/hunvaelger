@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
-import { prisma } from "@/lib/prisma"; // eller: import { prisma } from "../../../lib/prisma";
+import { prisma } from "@/lib/prisma";
 
 export async function POST(req: Request) {
   const token = req.headers.get("x-admin-token");
@@ -22,19 +22,12 @@ export async function POST(req: Request) {
 
     const exists = await prisma.user.findUnique({ where: { email: normEmail } });
     if (exists) {
-      return NextResponse.json(
-        { ok: false, error: "Email findes allerede" },
-        { status: 409 }
-      );
+      return NextResponse.json({ ok: false, error: "Email findes allerede" }, { status: 409 });
     }
 
     const passwordHash = await bcrypt.hash(password, 12);
     const user = await prisma.user.create({
-      data: {
-        email: normEmail,
-        name: name?.trim() || "Admin",
-        passwordHash,
-      },
+      data: { email: normEmail, name: name?.trim() || "Admin", passwordHash },
       select: { id: true, email: true, name: true },
     });
 
