@@ -14,7 +14,6 @@
     "prisma:studio": "prisma studio"
   },
   "dependencies": {
-<<<<<<< HEAD
     "@auth/core": "^0.22.1",
     "@prisma/client": "^5.21.1",
     "bcryptjs": "^2.4.3",
@@ -23,20 +22,6 @@
     "next-auth": "^5.0.0-beta.20",
     "react": "^18.3.1",
     "react-dom": "^18.3.1"
-=======
-    "@prisma/client": "^6.18.0",
-    "@upstash/redis": "^1.35.6",
-    "@vercel/blob": "^2.0.0",
-    "@vercel/kv": "^2.0.0",
-    "bcryptjs": "^3.0.3",
-    "lucide-react": "^0.468.0",
-    "next": "15.5.3",
-    "next-auth": "^4.24.13",
-    "qrcode": "^1.5.3",
-    "qrcode.react": "^3.1.0",
-    "react": "18.3.1",
-    "react-dom": "18.3.1"
->>>>>>> 9b82aed (Auth/DB: add Prisma schema+migrations, lib/prisma, create-admin route; remove duplicate .jsx pages; jsconfig alias)
   },
   "devDependencies": {
     "@types/bcryptjs": "^2.4.2",
@@ -47,15 +32,9 @@
     "eslint": "^8.57.0",
     "eslint-config-next": "15.5.3",
     "postcss": "^8.4.47",
-<<<<<<< HEAD
     "prisma": "^5.21.1",
     "tailwindcss": "^3.4.13",
     "typescript": "^5.6.3"
-=======
-    "prisma": "^6.18.0",
-    "tailwindcss": "^3.4.14",
-    "typescript": "^5.5.4"
->>>>>>> 9b82aed (Auth/DB: add Prisma schema+migrations, lib/prisma, create-admin route; remove duplicate .jsx pages; jsconfig alias)
   },
   "engines": {
     "node": ">=18.17.0"
