@@ -4,8 +4,13 @@ generator client {
 }
 
 datasource db {
+<<<<<<< HEAD
   provider = "postgresql"         // ← SKIFTET fra "sqlite" til "postgresql"
   url      = env("DATABASE_URL")  // Neon connection string
+=======
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+>>>>>>> 36d4117 (chore(db): reset migrations for PostgreSQL (Neon) and add initial migration)
 }
 
 model User {
