@@ -1,74 +1,79 @@
 // app/api/profiles/[id]/route.ts
 import { NextRequest, NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "../../auth/[...nextauth]/auth-options";
-import { readProfiles, saveProfiles } from "@/lib/db-kv";
-import { Profile } from "@/lib/db-kv";
+import { getServerSession } from "next-auth/next";
+import { authOptions } from "@/app/api/auth/[...nextauth]/auth-options";
+import prisma from "@/lib/prisma";
 
-/**
- * GET  - offentlig adgang (QR-link)
- * PUT  - kun profil-ejer
- * DELETE - kun profil-ejer
- */
+// Hent en profil på id (offentligt)
+export async function GET(
+  _req: NextRequest,
+  { params }: { params: { id: string } }
+) {
+  try {
+    const profile = await prisma.profile.findUnique({
+      where: { id: params.id },
+    });
 
-export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
-  const list = await readProfiles();
-  const profile = list.find((p) => p.id === params.id);
+    if (!profile) {
+      return NextResponse.json({ error: "Profil ikke fundet." }, { status: 404 });
+    }
 
-  if (!profile) {
-    return NextResponse.json({ ok: false, error: "Profil ikke fundet" }, { status: 404 });
+    return NextResponse.json(profile);
+  } catch (err) {
+    console.error(`GET /api/profiles/${params.id} error:`, err);
+    return NextResponse.json({ error: "Fejl ved hentning af profil." }, { status: 500 });
   }
-
-  return NextResponse.json({ ok: true, profile });
 }
 
-export async function PUT(req: NextRequest, { params }: { params: { id: string } }) {
-  const session = await getServerSession(authOptions);
+// Opdater en specifik profil (kræver ejerskab af profilen eller evt. admin-rolle)
+export async function PATCH(
+  req: NextRequest,
+  { params }: { params: { id: string } }
+) {
+  try {
+    const session = await getServerSession(authOptions);
+    if (!session?.user?.email) {
+      return NextResponse.json({ error: "Ikke logget ind." }, { status: 401 });
+    }
 
-  if (!session) {
-    return NextResponse.json({ ok: false, error: "Login kræves" }, { status: 401 });
+    const user = await prisma.user.findUnique({
+      where: { email: session.user.email },
+      select: { id: true },
+    });
+    if (!user) {
+      return NextResponse.json({ error: "Bruger ikke fundet." }, { status: 404 });
+    }
+
+    const existing = await prisma.profile.findUnique({
+      where: { id: params.id },
+      select: { userId: true },
+    });
+    if (!existing) {
+      return NextResponse.json({ error: "Profil ikke fundet." }, { status: 404 });
+    }
+
+    // Basal ejerskabskontrol: kun ejeren (samme userId) må opdatere
+    if (existing.userId && existing.userId !== user.id) {
+      return NextResponse.json({ error: "Adgang nægtet." }, { status: 403 });
+    }
+
+    const data = await req.json().catch(() => ({}));
+    const allowed = (({ displayName, bio, age, city, imageUrl }) => ({
+      displayName,
+      bio,
+      age,
+      city,
+      imageUrl,
+    }))(data || {});
+
+    const updated = await prisma.profile.update({
+      where: { id: params.id },
+      data: allowed,
+    });
+
+    return NextResponse.json(updated);
+  } catch (err) {
+    console.error(`PATCH /api/profiles/${params.id} error:`, err);
+    return NextResponse.json({ error: "Kunne ikke opdatere profil." }, { status: 500 });
   }
-
-  const list = await readProfiles();
-  const index = list.findIndex((p) => p.id === params.id);
-
-  if (index === -1) {
-    return NextResponse.json({ ok: false, error: "Profil ikke fundet" }, { status: 404 });
-  }
-
-  const profile = list[index];
-  if (profile.userId !== session.user.email) {
-    return NextResponse.json({ ok: false, error: "Ingen adgang" }, { status: 403 });
-  }
-
-  const body = await req.json();
-  const updated: Profile = { ...profile, ...body };
-  list[index] = updated;
-  await saveProfiles(list);
-
-  return NextResponse.json({ ok: true, profile: updated });
-}
-
-export async function DELETE(req: NextRequest, { params }: { params: { id: string } }) {
-  const session = await getServerSession(authOptions);
-
-  if (!session) {
-    return NextResponse.json({ ok: false, error: "Login kræves" }, { status: 401 });
-  }
-
-  const list = await readProfiles();
-  const profile = list.find((p) => p.id === params.id);
-
-  if (!profile) {
-    return NextResponse.json({ ok: false, error: "Profil ikke fundet" }, { status: 404 });
-  }
-
-  if (profile.userId !== session.user.email) {
-    return NextResponse.json({ ok: false, error: "Ingen adgang" }, { status: 403 });
-  }
-
-  const updatedList = list.filter((p) => p.id !== params.id);
-  await saveProfiles(updatedList);
-
-  return NextResponse.json({ ok: true, message: "Profil slettet" });
 }
