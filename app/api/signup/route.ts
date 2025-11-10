@@ -1,61 +1,70 @@
 // app/api/signup/route.ts
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
+import { PrismaClient, Prisma } from "@prisma/client";
 import bcrypt from "bcryptjs";
-import prisma from "@/lib/prisma";
+import { z } from "zod";
 
-export async function POST(req: NextRequest) {
+export const runtime = "nodejs"; // sikre at bcrypt kører i node-runtime
+
+const prisma = new PrismaClient();
+
+const signupSchema = z.object({
+  email: z.string().email(),
+  password: z.string().min(6, "Password skal være mindst 6 tegn"),
+  name: z.string().min(1).max(100),
+  age: z.coerce.number().int().min(18).max(99),
+  bio: z.string().max(1000).optional().default(""),
+});
+
+export async function POST(req: Request) {
   try {
-    const body = await req.json().catch(() => ({}));
-    const { email, password, name } = body ?? {};
+    const raw = await req.json();
+    const data = signupSchema.parse(raw);
 
-    if (!email || !password) {
-      return NextResponse.json(
-        { error: "Email og adgangskode er påkrævet." },
-        { status: 400 }
-      );
-    }
+    const hashed = await bcrypt.hash(data.password, 10);
 
-    // Simpel validering
-    if (typeof email !== "string" || typeof password !== "string") {
-      return NextResponse.json(
-        { error: "Ugyldig input." },
-        { status: 400 }
-      );
-    }
-    if (password.length < 8) {
-      return NextResponse.json(
-        { error: "Adgangskoden skal være mindst 8 tegn." },
-        { status: 400 }
-      );
-    }
-
-    const exists = await prisma.user.findUnique({
-      where: { email },
-      select: { id: true },
+    // Opret User + Profile i én transaktion
+    const user = await prisma.user.create({
+      data: {
+        email: data.email,
+        password: hashed,
+        profile: {
+          create: {
+            name: data.name,
+            age: data.age,
+            bio: data.bio,
+            images: [], // holdes tom til upload
+          },
+        },
+      },
+      include: { profile: true },
     });
-    if (exists) {
+
+    return NextResponse.json(
+      { ok: true, userId: user.id, profileId: user.profile?.id },
+      { status: 201 }
+    );
+  } catch (err: any) {
+    // Unik-konflikt (e-mail findes)
+    if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") {
       return NextResponse.json(
-        { error: "Email er allerede i brug." },
+        { ok: false, error: "EMAIL_EXISTS", message: "E-mail er allerede registreret" },
         { status: 409 }
       );
     }
 
-    const passwordHash = await bcrypt.hash(password, 10);
+    // Zod validation
+    if (err instanceof z.ZodError) {
+      return NextResponse.json(
+        { ok: false, error: "VALIDATION", issues: err.issues },
+        { status: 400 }
+      );
+    }
 
-    const user = await prisma.user.create({
-      data: {
-        email,
-        name: typeof name === "string" ? name : null,
-        passwordHash,
-      },
-      select: { id: true, email: true, name: true }
-    });
-
-    return NextResponse.json(user, { status: 201 });
-  } catch (err) {
-    console.error("POST /api/signup error:", err);
+    // Fallback
+    console.error("SIGNUP_ERROR", err);
     return NextResponse.json(
-      { error: "Kunne ikke oprette bruger." },
+      { ok: false, error: "INTERNAL", message: "Kunne ikke oprette bruger" },
       { status: 500 }
     );
   }
