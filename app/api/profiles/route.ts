@@ -1,60 +1,67 @@
 // app/api/profiles/route.ts
-import { NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "../auth/[...nextauth]/auth-options";
-import { readProfiles, saveProfiles } from "@/lib/db-kv";
-import { Profile } from "@/lib/db-kv";
+import { NextRequest, NextResponse } from "next/server";
+import { getServerSession } from "next-auth/next";
+import { authOptions } from "@/app/api/auth/[...nextauth]/auth-options";
+import prisma from "@/lib/prisma";
 
-/**
- * GET = kun for admin (valgfrit)
- * POST = opret ny profil (kun for kvinder/logget ind)
- */
+// Hent en simpel liste af profiler (offentligt endpoint)
 export async function GET() {
   try {
-    const profiles = await readProfiles();
-    return NextResponse.json({ ok: true, profiles });
+    const profiles = await prisma.profile.findMany({
+      take: 100,
+      orderBy: { createdAt: "desc" },
+      // Hvis din Profile-model har felter som er "tunge" (fx store description-felter),
+      // kan du evt. vælge/selecte specifikke felter her.
+    });
+    return NextResponse.json({ profiles });
   } catch (err) {
-    console.error("Fejl i GET /api/profiles:", err);
-    return NextResponse.json({ ok: false, error: "Kunne ikke hente profiler" }, { status: 500 });
+    console.error("GET /api/profiles error:", err);
+    return NextResponse.json({ error: "Kunne ikke hente profiler." }, { status: 500 });
   }
 }
 
-export async function POST(req: Request) {
-  const session = await getServerSession(authOptions);
-
-  if (!session) {
-    return NextResponse.json({ ok: false, error: "Login kræves" }, { status: 401 });
-  }
-
-  // Du kan evt. tjekke om brugeren er "kvinde"
-  // fx if (session.user.gender !== "female") return 403;
-
+// Opret/Opdater min profil (kræver login).
+// Strategi: upsert på userId (forudsætter unikt userId i Profile)
+export async function POST(req: NextRequest) {
   try {
-    const body = await req.json();
-    const { name, age, bio, images, slug } = body;
-
-    if (!name || !age || !bio) {
-      return NextResponse.json({ ok: false, error: "Manglende felter" }, { status: 400 });
+    const session = await getServerSession(authOptions);
+    if (!session?.user?.email) {
+      return NextResponse.json({ error: "Ikke logget ind." }, { status: 401 });
     }
 
-    const list = await readProfiles();
+    const body = await req.json().catch(() => ({}));
+    const { displayName, bio, age, city, imageUrl } = body ?? {};
 
-    const newProfile: Profile = {
-      id: Date.now().toString(),
-      userId: session.user.email ?? "unknown",
-      name,
-      age,
-      bio,
-      images: images ?? [],
-      slug: slug ?? name.toLowerCase().replace(/\s+/g, "-"),
-    };
+    const user = await prisma.user.findUnique({
+      where: { email: session.user.email },
+      select: { id: true, name: true },
+    });
+    if (!user) {
+      return NextResponse.json({ error: "Bruger ikke fundet." }, { status: 404 });
+    }
 
-    list.push(newProfile);
-    await saveProfiles(list);
+    const profile = await prisma.profile.upsert({
+      where: { userId: user.id }, // kræver @unique på userId i Prisma
+      update: {
+        displayName,
+        bio,
+        age,
+        city,
+        imageUrl,
+      },
+      create: {
+        userId: user.id,
+        displayName: displayName ?? user.name ?? "",
+        bio: bio ?? "",
+        age: age ?? null,
+        city: city ?? null,
+        imageUrl: imageUrl ?? null,
+      },
+    });
 
-    return NextResponse.json({ ok: true, profile: newProfile });
+    return NextResponse.json(profile, { status: 201 });
   } catch (err) {
-    console.error("Fejl i POST /api/profiles:", err);
-    return NextResponse.json({ ok: false, error: "Kunne ikke oprette profil" }, { status: 500 });
+    console.error("POST /api/profiles error:", err);
+    return NextResponse.json({ error: "Kunne ikke gemme profil." }, { status: 500 });
   }
 }
