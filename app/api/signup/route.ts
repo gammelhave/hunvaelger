@@ -4,7 +4,7 @@ import { PrismaClient, Prisma } from "@prisma/client";
 import bcrypt from "bcryptjs";
 import { z } from "zod";
 
-export const runtime = "nodejs"; // sikre at bcrypt kører i node-runtime
+export const runtime = "nodejs";
 
 const prisma = new PrismaClient();
 
@@ -23,17 +23,16 @@ export async function POST(req: Request) {
 
     const hashed = await bcrypt.hash(data.password, 10);
 
-    // Opret User + Profile i én transaktion
     const user = await prisma.user.create({
       data: {
         email: data.email,
-        password: hashed,
+        password: hashed, // skal findes i din Prisma-model
         profile: {
           create: {
             name: data.name,
             age: data.age,
             bio: data.bio,
-            images: [], // holdes tom til upload
+            // images: []  // <— fjernet for kompatibilitet
           },
         },
       },
@@ -45,23 +44,18 @@ export async function POST(req: Request) {
       { status: 201 }
     );
   } catch (err: any) {
-    // Unik-konflikt (e-mail findes)
     if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") {
       return NextResponse.json(
         { ok: false, error: "EMAIL_EXISTS", message: "E-mail er allerede registreret" },
         { status: 409 }
       );
     }
-
-    // Zod validation
     if (err instanceof z.ZodError) {
       return NextResponse.json(
         { ok: false, error: "VALIDATION", issues: err.issues },
         { status: 400 }
       );
     }
-
-    // Fallback
     console.error("SIGNUP_ERROR", err);
     return NextResponse.json(
       { ok: false, error: "INTERNAL", message: "Kunne ikke oprette bruger" },
