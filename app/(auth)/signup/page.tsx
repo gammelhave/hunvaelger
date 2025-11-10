@@ -32,17 +32,43 @@ export default function SignupPage() {
       return;
     }
 
+    // Rens alder til kun cifre og konverter til tal
+    const ageClean = (age ?? "").toString().trim().replace(/[^\d]/g, "");
+    const ageNum = ageClean ? Number(ageClean) : NaN;
+    if (Number.isNaN(ageNum)) {
+      setMsg("Alder skal være et tal (18–99).");
+      return;
+    }
+
     setBusy(true);
     try {
-      // 1) Opret konto
+      // 1) Opret konto + profil (sender ALLE felter til /api/signup)
       const res = await fetch("/api/signup", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password, name }),
+        body: JSON.stringify({
+          email,
+          password,
+          name: name || email.split("@")[0],
+          age: ageNum,
+          bio: bio || "",
+        }),
       });
+
       const data = await res.json();
+
       if (!res.ok || !data?.ok) {
-        throw new Error(data?.error || "Kunne ikke oprette konto.");
+        // Backend-fejl – vis læsbar besked
+        if (data?.error === "EMAIL_EXISTS") {
+          throw new Error("E-mail er allerede registreret.");
+        }
+        if (data?.error === "VALIDATION") {
+          const msg =
+            data?.issues?.map((i: any) => i?.message || JSON.stringify(i)).join(" · ") ||
+            "Ugyldigt input.";
+          throw new Error(msg);
+        }
+        throw new Error(data?.message || "Kunne ikke oprette konto.");
       }
 
       // 2) Log ind
@@ -55,21 +81,8 @@ export default function SignupPage() {
         throw new Error("Konto oprettet, men login fejlede.");
       }
 
-      // 3) Opret profil (hvis du bruger endpointet /api/profiles)
-      if (name || age || bio) {
-        await fetch("/api/profiles", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            name: name || email.split("@")[0],
-            age: age ? Number(age) : undefined,
-            bio: bio || undefined,
-          }),
-        }).catch(() => {}); // må gerne fejle stille
-      }
-
-      // 4) Videre til /admin eller /p
-      router.replace("/admin");
+      // 3) Videre til /admin eller /p
+      router.replace("/admin"); // eller "/p" hvis det er det du vil
     } catch (err: any) {
       setMsg(err?.message || "Der opstod en fejl.");
     } finally {
@@ -108,6 +121,7 @@ export default function SignupPage() {
           onChange={(e) => setPassword(e.target.value)}
           disabled={busy}
           required
+          minLength={8}
         />
         <input
           className="w-full border rounded p-2"
@@ -118,6 +132,7 @@ export default function SignupPage() {
           onChange={(e) => setConfirm(e.target.value)}
           disabled={busy}
           required
+          minLength={8}
         />
 
         <div className="pt-2"></div>
@@ -130,19 +145,21 @@ export default function SignupPage() {
           value={name}
           onChange={(e) => setName(e.target.value)}
           disabled={busy}
+          required
         />
         <input
           className="w-full border rounded p-2"
-          type="number"
-          placeholder="Alder (valgfri)"
+          type="text"
+          inputMode="numeric"
+          placeholder="Alder (18–99)"
           value={age}
           onChange={(e) => setAge(e.target.value)}
           disabled={busy}
-          min={18}
+          required
         />
         <textarea
           className="w-full border rounded p-2 min-h-[120px]"
-          placeholder="Kort om dig (valgfri)"
+          placeholder="Kort om dig"
           value={bio}
           onChange={(e) => setBio(e.target.value)}
           disabled={busy}
