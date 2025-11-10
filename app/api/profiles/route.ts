@@ -10,11 +10,7 @@ const profileSchema = z.object({
   bio: z.string().max(1000).optional().default(""),
 });
 
-/**
- * GET /api/profiles
- * Returnerer en liste af profiler (seneste først).
- * Valgfri ?limit=XX (default 100)
- */
+// GET /api/profiles – hent alle profiler
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
   const limit = Number(searchParams.get("limit") || "100");
@@ -28,10 +24,7 @@ export async function GET(req: Request) {
   return NextResponse.json({ ok: true, profiles });
 }
 
-/**
- * POST /api/profiles
- * Opretter en profil (standalone endpoint – bruges typisk kun hvis du ikke opretter profilen via /api/signup)
- */
+// POST /api/profiles – opret ny profil
 export async function POST(req: Request) {
   try {
     const body = await req.json();
@@ -42,7 +35,6 @@ export async function POST(req: Request) {
         name: data.name,
         age: data.age,
         bio: data.bio,
-        // Hvis du vil knytte den til en user, så modtag en userId i schemaet og brug den her.
       },
       select: { id: true, name: true, age: true, bio: true, createdAt: true },
     });
