@@ -1,12 +1,11 @@
 import { NextResponse } from "next/server";
-import { Prisma, PrismaClient } from "@prisma/client";
 import bcrypt from "bcryptjs";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 
 export const runtime = "nodejs";
 
-// Robust alder: accepter string/number, rens og coerces til int 18–99
+// Robust alder: accepterer string/number, renser og coerces til tal
 const ageSchema = z
   .union([z.string(), z.number()])
   .transform((v) => {
@@ -31,11 +30,11 @@ export async function POST(req: Request) {
 
     const hashed = await bcrypt.hash(data.password, 10);
 
-    // Opret User + Profile i én transaktion
+    // Opret bruger + profil i én transaktion
     const user = await prisma.user.create({
       data: {
         email: data.email,
-        password: hashed, // kræver password String i Prisma User-model
+        password: hashed,
         profile: {
           create: {
             name: data.name,
@@ -47,28 +46,18 @@ export async function POST(req: Request) {
       include: { profile: true },
     });
 
-    return NextResponse.json(
-      { ok: true, userId: user.id, profileId: user.profile?.id },
-      { status: 201 }
-    );
+    return NextResponse.json({ ok: true, userId: user.id, profileId: user.profile?.id }, { status: 201 });
   } catch (err: any) {
-    // Unik e-mail (Prisma)
     if (err?.code === "P2002") {
       return NextResponse.json(
         { ok: false, error: "EMAIL_EXISTS", message: "E-mail er allerede registreret" },
         { status: 409 }
       );
     }
-
-    // Zod validation
     if (err?.name === "ZodError") {
-      return NextResponse.json(
-        { ok: false, error: "VALIDATION", issues: err.issues },
-        { status: 400 }
-      );
+      return NextResponse.json({ ok: false, error: "VALIDATION", issues: err.issues }, { status: 400 });
     }
 
-    // Debug-venlig fallback
     const code = err?.code || err?.name || "INTERNAL";
     const message = err?.meta?.cause || err?.message || "Kunne ikke oprette bruger";
     console.error("SIGNUP_ERROR", err);
