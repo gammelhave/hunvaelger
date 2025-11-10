@@ -6,10 +6,7 @@ export const runtime = "nodejs";
 
 const idSchema = z.string().min(1);
 
-/**
- * GET /api/profiles/[id]
- * Returnerer en enkelt profil.
- */
+// GET /api/profiles/[id] – hent én profil
 export async function GET(_req: Request, ctx: { params: { id: string } }) {
   try {
     const id = idSchema.parse(ctx.params.id);
@@ -20,7 +17,7 @@ export async function GET(_req: Request, ctx: { params: { id: string } }) {
     });
 
     if (!profile) {
-      return NextResponse.json({ ok: false, error: "NOT_FOUND", message: "Profil blev ikke fundet" }, { status: 404 });
+      return NextResponse.json({ ok: false, error: "NOT_FOUND", message: "Profil ikke fundet" }, { status: 404 });
     }
 
     return NextResponse.json({ ok: true, profile });
