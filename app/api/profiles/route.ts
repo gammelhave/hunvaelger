@@ -1,67 +1,58 @@
-// app/api/profiles/route.ts
-import { NextRequest, NextResponse } from "next/server";
-import { getServerSession } from "next-auth/next";
-import { authOptions } from "@/app/api/auth/[...nextauth]/auth-options";
-import prisma from "@/lib/prisma";
+import { NextResponse } from "next/server";
+import { z } from "zod";
+import { prisma } from "@/lib/prisma";
 
-// Hent en simpel liste af profiler (offentligt endpoint)
-export async function GET() {
-  try {
-    const profiles = await prisma.profile.findMany({
-      take: 100,
-      orderBy: { createdAt: "desc" },
-      // Hvis din Profile-model har felter som er "tunge" (fx store description-felter),
-      // kan du evt. vælge/selecte specifikke felter her.
-    });
-    return NextResponse.json({ profiles });
-  } catch (err) {
-    console.error("GET /api/profiles error:", err);
-    return NextResponse.json({ error: "Kunne ikke hente profiler." }, { status: 500 });
-  }
+export const runtime = "nodejs";
+
+const profileSchema = z.object({
+  name: z.string().min(1, "Navn er påkrævet").max(100),
+  age: z.coerce.number().int().min(18, "Alder skal være mindst 18").max(99, "Alder skal være under 100"),
+  bio: z.string().max(1000).optional().default(""),
+});
+
+/**
+ * GET /api/profiles
+ * Returnerer en liste af profiler (seneste først).
+ * Valgfri ?limit=XX (default 100)
+ */
+export async function GET(req: Request) {
+  const { searchParams } = new URL(req.url);
+  const limit = Number(searchParams.get("limit") || "100");
+
+  const profiles = await prisma.profile.findMany({
+    take: Math.max(1, Math.min(limit, 500)),
+    orderBy: { createdAt: "desc" },
+    select: { id: true, name: true, age: true, bio: true, userId: true, createdAt: true },
+  });
+
+  return NextResponse.json({ ok: true, profiles });
 }
 
-// Opret/Opdater min profil (kræver login).
-// Strategi: upsert på userId (forudsætter unikt userId i Profile)
-export async function POST(req: NextRequest) {
+/**
+ * POST /api/profiles
+ * Opretter en profil (standalone endpoint – bruges typisk kun hvis du ikke opretter profilen via /api/signup)
+ */
+export async function POST(req: Request) {
   try {
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.email) {
-      return NextResponse.json({ error: "Ikke logget ind." }, { status: 401 });
-    }
+    const body = await req.json();
+    const data = profileSchema.parse(body);
 
-    const body = await req.json().catch(() => ({}));
-    const { displayName, bio, age, city, imageUrl } = body ?? {};
-
-    const user = await prisma.user.findUnique({
-      where: { email: session.user.email },
-      select: { id: true, name: true },
-    });
-    if (!user) {
-      return NextResponse.json({ error: "Bruger ikke fundet." }, { status: 404 });
-    }
-
-    const profile = await prisma.profile.upsert({
-      where: { userId: user.id }, // kræver @unique på userId i Prisma
-      update: {
-        displayName,
-        bio,
-        age,
-        city,
-        imageUrl,
+    const profile = await prisma.profile.create({
+      data: {
+        name: data.name,
+        age: data.age,
+        bio: data.bio,
+        // Hvis du vil knytte den til en user, så modtag en userId i schemaet og brug den her.
       },
-      create: {
-        userId: user.id,
-        displayName: displayName ?? user.name ?? "",
-        bio: bio ?? "",
-        age: age ?? null,
-        city: city ?? null,
-        imageUrl: imageUrl ?? null,
-      },
+      select: { id: true, name: true, age: true, bio: true, createdAt: true },
     });
 
-    return NextResponse.json(profile, { status: 201 });
-  } catch (err) {
-    console.error("POST /api/profiles error:", err);
-    return NextResponse.json({ error: "Kunne ikke gemme profil." }, { status: 500 });
+    return NextResponse.json({ ok: true, profile }, { status: 201 });
+  } catch (err: any) {
+    if (err?.name === "ZodError") {
+      return NextResponse.json({ ok: false, error: "VALIDATION", issues: err.issues }, { status: 400 });
+    }
+    console.error("PROFILES_POST_ERROR", err);
+    return NextResponse.json({ ok: false, error: "INTERNAL", message: "Kunne ikke oprette profil" }, { status: 500 });
   }
 }
