@@ -1,3 +1,8 @@
+// ------------------------------------------------------------
+//  HunVælger – Prisma schema
+//  Database: PostgreSQL (Neon / Supabase / Render)
+// ------------------------------------------------------------
+
 generator client {
   provider = "prisma-client-js"
 }
@@ -7,20 +12,35 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+// ------------------------------------------------------------
+//  MODELS
+// ------------------------------------------------------------
+
 model User {
   id        String   @id @default(cuid())
   email     String   @unique
   password  String
   profile   Profile?
   createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
+
+// ------------------------------------------------------------
 
 model Profile {
   id        String   @id @default(cuid())
   userId    String   @unique
-  user      User     @relation(fields: [userId], references: [id])
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   name      String
   age       Int
   bio       String?
+  images    String[] @default([])   // ← gemmer 0–3 billed-URLs pr. profil
   createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
+
+// ------------------------------------------------------------
+//  Eksempel på fremtidige modeller (kan tilføjes senere):
+//  model Like { ... }    // hvem har liket hvem
+//  model Match { ... }   // mutual like
+// ------------------------------------------------------------
