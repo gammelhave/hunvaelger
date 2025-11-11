@@ -9,44 +9,34 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-/* =============================
-   MODELS
-   ============================= */
-
-/** Login-konto */
+// Login-konto
 model User {
   id        String   @id @default(cuid())
   email     String   @unique
   password  String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
   profile   Profile?
-
-  createdAt DateTime @default(now())
-  // @updatedAt opdaterer automatisk værdien ved hver write,
-  // @default(now()) gør migrations mulige når der findes eksisterende rækker
-  updatedAt DateTime @updatedAt @default(now())
 }
 
-/** Offentlig profil til brugeren */
+// Offentlig profil til brugeren
 model Profile {
-  id        String   @id @default(cuid())
-
-  userId    String   @unique
-  user      User     @relation(fields: [userId], references: [id])
-
+  id        String    @id @default(cuid())
+  userId    String    @unique
+  user      User      @relation(fields: [userId], references: [id])
   name      String
-  age       Int?          // valgfri
-  bio       String?       // valgfri
-  images    String[]      // liste af billed-URLs
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt @default(now())
+  age       Int?
+  bio       String?
+  images    String[]  @default([])
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
 }
 
-/** Valgfrit: liste over admin-emails (bruges af /api/dev/create-admin) */
+// Valgfrit: liste over admin-emails (bruges af /api/dev/create-admin)
 model Admin {
   id        String   @id @default(cuid())
   email     String   @unique
-
   createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt @default(now())
+  updatedAt DateTime @updatedAt
 }
