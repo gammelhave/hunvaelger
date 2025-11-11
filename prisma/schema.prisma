@@ -1,3 +1,5 @@
+// prisma/schema.prisma
+
 generator client {
   provider = "prisma-client-js"
 }
@@ -7,11 +9,11 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-//
-// === MODELS ===
-//
+/* =============================
+   MODELS
+   ============================= */
 
-// Brugerens login-konto
+/** Login-konto */
 model User {
   id        String   @id @default(cuid())
   email     String   @unique
@@ -19,10 +21,12 @@ model User {
   profile   Profile?
 
   createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  // @updatedAt opdaterer automatisk værdien ved hver write,
+  // @default(now()) gør migrations mulige når der findes eksisterende rækker
+  updatedAt DateTime @updatedAt @default(now())
 }
 
-// Brugerens offentlige profil
+/** Offentlig profil til brugeren */
 model Profile {
   id        String   @id @default(cuid())
 
@@ -30,18 +34,19 @@ model Profile {
   user      User     @relation(fields: [userId], references: [id])
 
   name      String
-  age       Int?          // valgfri alder
-  bio       String?       // valgfri tekst
-  images    String[]      // liste af billed-URLs (fra blob storage)
+  age       Int?          // valgfri
+  bio       String?       // valgfri
+  images    String[]      // liste af billed-URLs
 
   createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  updatedAt DateTime @updatedAt @default(now())
 }
 
-// Valgfrit - brugt af /api/dev/create-admin
+/** Valgfrit: liste over admin-emails (bruges af /api/dev/create-admin) */
 model Admin {
   id        String   @id @default(cuid())
   email     String   @unique
+
   createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  updatedAt DateTime @updatedAt @default(now())
 }
