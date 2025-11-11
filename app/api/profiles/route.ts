@@ -1,50 +1,66 @@
+// app/api/profiles/route.ts
 import { NextResponse } from "next/server";
-import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 
-export const runtime = "nodejs";
-
-const profileSchema = z.object({
-  name: z.string().min(1, "Navn er påkrævet").max(100),
-  age: z.coerce.number().int().min(18, "Alder skal være mindst 18").max(99, "Alder skal være under 100"),
-  bio: z.string().max(1000).optional().default(""),
-});
-
-// GET /api/profiles – hent alle profiler
-export async function GET(req: Request) {
-  const { searchParams } = new URL(req.url);
-  const limit = Number(searchParams.get("limit") || "100");
-
-  const profiles = await prisma.profile.findMany({
-    take: Math.max(1, Math.min(limit, 500)),
-    orderBy: { createdAt: "desc" },
-    select: { id: true, name: true, age: true, bio: true, userId: true, createdAt: true },
-  });
-
-  return NextResponse.json({ ok: true, profiles });
+function toStringArray(val: any): string[] {
+  if (!Array.isArray(val)) return [];
+  return val.filter((x) => typeof x === "string" && x.trim().length > 0);
 }
 
-// POST /api/profiles – opret ny profil
+// GET: list profiles (til admin/list og /p)
+export async function GET() {
+  try {
+    const profiles = await prisma.profile.findMany({
+      orderBy: { createdAt: "desc" },
+    });
+    return NextResponse.json({ ok: true, profiles });
+  } catch (err) {
+    console.error("GET /api/profiles error:", err);
+    return NextResponse.json(
+      { ok: false, error: "INTERNAL", message: "Kunne ikke hente profiler" },
+      { status: 500 }
+    );
+  }
+}
+
+// POST: create profile
 export async function POST(req: Request) {
   try {
     const body = await req.json();
-    const data = profileSchema.parse(body);
+
+    const name = (body?.name ?? "").toString().trim();
+    const ageNum = Number(body?.age);
+    const bio =
+      typeof body?.bio === "string" && body.bio.trim().length > 0
+        ? body.bio.trim()
+        : undefined;
+
+    // vigtigst: images SKAL være en string[]
+    const images: string[] = toStringArray(body?.images);
+
+    if (!name || !Number.isFinite(ageNum)) {
+      return NextResponse.json(
+        { ok: false, error: "VALIDATION", message: "Ugyldige felter" },
+        { status: 400 }
+      );
+    }
 
     const profile = await prisma.profile.create({
       data: {
-        name: data.name,
-        age: data.age,
-        bio: data.bio,
+        name,
+        age: ageNum,
+        bio,
+        images, // gemmer tom liste hvis intet blev sendt
+        // userId: "...", // hvis du knytter profiler til en bruger, sæt det her
       },
-      select: { id: true, name: true, age: true, bio: true, createdAt: true },
     });
 
     return NextResponse.json({ ok: true, profile }, { status: 201 });
-  } catch (err: any) {
-    if (err?.name === "ZodError") {
-      return NextResponse.json({ ok: false, error: "VALIDATION", issues: err.issues }, { status: 400 });
-    }
-    console.error("PROFILES_POST_ERROR", err);
-    return NextResponse.json({ ok: false, error: "INTERNAL", message: "Kunne ikke oprette profil" }, { status: 500 });
+  } catch (err) {
+    console.error("POST /api/profiles error:", err);
+    return NextResponse.json(
+      { ok: false, error: "INTERNAL", message: "Kunne ikke oprette profil" },
+      { status: 500 }
+    );
   }
 }
