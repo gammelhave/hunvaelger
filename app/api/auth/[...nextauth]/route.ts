@@ -1,4 +1,3 @@
-// app/api/auth/[...nextauth]/route.ts
 import NextAuth, { NextAuthOptions } from "next-auth";
 import Credentials from "next-auth/providers/credentials";
 import { prisma } from "@/lib/prisma";
@@ -40,8 +39,8 @@ export const authOptions: NextAuthOptions = {
     async jwt({ token, user }) {
       if (user) {
         token.sub = (user as any).id;
-        token.email = user.email;
-        token.name = user.name;
+        token.email = (user as any).email;
+        token.name = (user as any).name;
       }
       return token;
     },
