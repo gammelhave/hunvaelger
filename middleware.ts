@@ -1,18 +1,32 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
+import { getToken } from "next-auth/jwt";
 
-export const config = {
-  matcher: ["/min-profil/:path*", "/admin/:path*"], // admin rutes til kvindens “min profil”
-};
+const ADMIN_PREFIX = "/admin";
 
-export function middleware(req: NextRequest) {
-  // simpel check: vi lader server-route selv lave den endelige rolle-kontrol.
-  // Her kan vi bare sikre at brugeren er logget ind; NextAuth tilføjer session cookie.
-  const hasSession = req.cookies.get("next-auth.session-token") || req.cookies.get("__Secure-next-auth.session-token");
-  if (!hasSession) {
-    const url = new URL("/login", req.url);
-    url.searchParams.set("callbackUrl", req.nextUrl.pathname);
+export async function middleware(req: NextRequest) {
+  const { pathname, origin } = req.nextUrl;
+  if (!pathname.startsWith(ADMIN_PREFIX)) return NextResponse.next();
+
+  // Kræv login
+  const token = await getToken({ req });
+  if (!token?.email) {
+    const url = new URL("/admin/login", origin);
+    url.searchParams.set("next", pathname);
     return NextResponse.redirect(url);
   }
-  return NextResponse.next();
+
+  // Billig tjek via lille API (marked som public route i Next)
+  const res = await fetch(new URL("/api/admin/_am_i_admin", origin), {
+    headers: { cookie: req.headers.get("cookie") ?? "" },
+  });
+
+  if (res.ok) return NextResponse.next();
+
+  // Ikke admin → forsiden
+  return NextResponse.redirect(new URL("/", origin));
 }
+
+export const config = {
+  matcher: ["/admin/:path*"],
+};
