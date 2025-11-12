@@ -4,112 +4,108 @@ import { prisma } from "@/lib/prisma";
 import bcrypt from "bcryptjs";
 import { z } from "zod";
 
-/**
- * Zod schema – gør age/bio valgfrie og accepterer tom streng.
- * - email: påkrævet
- * - password: påkrævet, min 8
- * - name: valgfri (hvis ikke givet, bruger vi delen før @ i email til profil)
- * - age: valgfri (int), min 18 hvis givet; "" => undefined
- * - bio: valgfri; "" => undefined
- */
-const SignupSchema = z.object({
-  email: z.string().email(),
-  password: z.string().min(8, "Password skal være mindst 8 tegn"),
-  name: z
-    .string()
-    .trim()
-    .transform((v) => (v.length ? v : undefined))
-    .optional(),
-  age: z
-    .preprocess((v) => {
-      if (v === "" || v === null || typeof v === "undefined") return undefined;
-      const n = Number(v);
-      return Number.isFinite(n) ? n : v;
-    }, z.number().int().min(18, "Alder skal være mindst 18").max(120, "Alder virker for høj").optional()),
-  bio: z
-    .string()
-    .trim()
-    .transform((v) => (v.length ? v : undefined))
-    .optional(),
-});
+// Helper: "" -> undefined + trim
+const emptyToUndef = (v: unknown) => {
+  if (typeof v === "string") {
+    const t = v.trim();
+    return t === "" ? undefined : t;
+  }
+  return v;
+};
 
-type SignupInput = z.infer<typeof SignupSchema>;
+const SignupSchema = z.object({
+  email: z.string().trim().toLowerCase().email({ message: "Ugyldig e-mail" }),
+  password: z.string().min(6, "Adgangskode skal være mindst 6 tegn"),
+  confirm: z.preprocess(emptyToUndef, z.string().optional()),
+  name: z.preprocess(emptyToUndef, z.string().min(1).optional()),
+  age: z.preprocess(
+    (v) => (typeof v === "string" && v.trim() === "" ? undefined : v),
+    z.coerce.number().int().min(18).max(120).optional()
+  ),
+  bio: z.preprocess(emptyToUndef, z.string().max(1000).optional()),
+});
 
 export async function POST(req: Request) {
   try {
-    const body = (await req.json()) as unknown;
+    const json = await req.json().catch(() => ({}));
+    const parsed = SignupSchema.safeParse(json);
 
-    const parsed = SignupSchema.safeParse(body);
     if (!parsed.success) {
       return NextResponse.json(
         {
           ok: false,
           error: "VALIDATION",
-          issues: parsed.error.issues,
-          message: "Ugyldigt input",
+          message: "Ugyldige felter",
+          issues: parsed.error.flatten(),
         },
         { status: 400 }
       );
     }
-    const { email, password, name, age, bio } = parsed.data as SignupInput;
 
-    // Findes email allerede?
+    const { email, password, confirm, name, age, bio } = parsed.data;
+
+    if (typeof confirm === "string" && confirm !== password) {
+      return NextResponse.json(
+        { ok: false, error: "VALIDATION", message: "Adgangskoderne matcher ikke" },
+        { status: 400 }
+      );
+    }
+
+    // Duplikat-check
     const existing = await prisma.user.findUnique({ where: { email } });
     if (existing) {
       return NextResponse.json(
-        { ok: false, error: "CONFLICT", message: "Email er allerede i brug." },
+        { ok: false, error: "DUPLICATE", message: "E-mail er allerede registreret" },
         { status: 409 }
       );
     }
 
     const hash = await bcrypt.hash(password, 10);
+    const fallbackName =
+      name ??
+      (email.includes("@") ? email.split("@")[0] : "Bruger");
 
-    // Opret bruger + evt. profil i en transaktion
-    const user = await prisma.$transaction(async (tx) => {
-      const u = await tx.user.create({
+    // Opret bruger + (valgfri) profil i én transaktion
+    const result = await prisma.$transaction(async (tx) => {
+      const user = await tx.user.create({
         data: {
           email,
           password: hash,
         },
       });
 
-      // Opret profil kun hvis der faktisk er profiloplysninger
-      const shouldCreateProfile = Boolean(name || typeof age !== "undefined" || bio);
-      if (shouldCreateProfile) {
-        await tx.profile.create({
-          data: {
-            userId: u.id,
-            name: name ?? email.split("@")[0],
-            age: typeof age === "number" ? age : undefined,
-            bio: bio ?? undefined,
-            images: [], // tom liste fra start
-          },
-        });
-      }
+      await tx.profile.create({
+        data: {
+          userId: user.id,
+          name: fallbackName,
+          age: age ?? 0, // 0 hvis ikke angivet (gør det nemt på UI)
+          bio: bio ?? null,
+          images: [], // tom liste til billeder
+        },
+      });
 
-      return u;
+      return user;
     });
 
     return NextResponse.json(
-      {
-        ok: true,
-        userId: user.id,
-        message: "Bruger oprettet",
-      },
+      { ok: true, userId: result.id, email: result.email },
       { status: 201 }
     );
   } catch (err: any) {
-    // Prisma unique constraint
+    // Prisma unique constraint?
     if (err?.code === "P2002") {
       return NextResponse.json(
-        { ok: false, error: "CONFLICT", message: "Email er allerede i brug." },
+        { ok: false, error: "DUPLICATE", message: "E-mail er allerede registreret" },
         { status: 409 }
       );
     }
-
-    console.error("Signup error:", err);
     return NextResponse.json(
-      { ok: false, error: "INTERNAL", message: "Kunne ikke oprette bruger" },
+      {
+        ok: false,
+        error: "INTERNAL",
+        message: "Kunne ikke oprette bruger",
+        detail: err?.message ?? String(err),
+      },
       { status: 500 }
     );
   }
