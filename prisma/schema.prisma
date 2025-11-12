@@ -7,7 +7,9 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// Login-konto
+// =======================
+// Login-konto (almindelig)
+// =======================
 model User {
   id        String   @id @default(cuid())
   email     String   @unique
@@ -18,7 +20,9 @@ model User {
   profile   Profile?
 }
 
-// Offentlig profil til brugeren
+// =======================
+// Offentlig profil
+// =======================
 model Profile {
   id        String   @id @default(cuid())
 
@@ -34,9 +38,17 @@ model Profile {
   updatedAt DateTime @updatedAt
 }
 
-// Valgfrit: simple admin-liste
+// =======================
+// Admin-roller
+// =======================
+enum AdminRole {
+  ADMIN
+  MASTER
+}
+
 model Admin {
-  id        String   @id @default(cuid())
-  email     String   @unique
-  createdAt DateTime @default(now())
+  id        String    @id @default(cuid())
+  email     String    @unique
+  role      AdminRole @default(ADMIN)
+  createdAt DateTime  @default(now())
 }
