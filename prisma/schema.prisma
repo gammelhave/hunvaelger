@@ -28,17 +28,13 @@ model Profile {
   name      String
   age       Int      @default(0)
   bio       String?
-<<<<<<< HEAD
   images    String[] @default([])
 
-=======
-  images    String[] @default([]) // ← gemmer 0–3 billed-URLs pr. profil
->>>>>>> 4edcafd (fix(prisma): replace block comments with //; keep models)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
 
-// Valgfrit: simple admin-liste (bruges af /api/dev/create-admin)
+// Valgfrit: simple admin-liste
 model Admin {
   id        String   @id @default(cuid())
   email     String   @unique
