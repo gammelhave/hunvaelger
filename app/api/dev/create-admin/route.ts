@@ -22,13 +22,12 @@ export async function POST(req: Request) {
 
     const email = data.email ?? "admin@hunvaelger.dk";
     const password = data.password ?? "Telefon1";
-    const name = data.name ?? "Admin";
 
     if (!email || !password) {
       return new NextResponse("Missing email or password", { status: 400 });
     }
 
-    // Find eksisterende bruger
+    // Tjek om bruger allerede findes
     const existing = await prisma.user.findUnique({ where: { email } });
     if (existing) {
       return NextResponse.json({
@@ -41,12 +40,11 @@ export async function POST(req: Request) {
     // Hash password
     const passwordHash = await bcrypt.hash(password, 10);
 
-    // VIGTIGT: gem i feltet "password" (som Prisma kræver)
+    // VIGTIGT: kun felter der findes i User-modellen
     const user = await prisma.user.create({
       data: {
         email,
-        password: passwordHash, // HER matcher vi schemaet
-        name,
+        password: passwordHash, // matcher User.password i schemaet
       },
     });
 
