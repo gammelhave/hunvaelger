@@ -2,25 +2,20 @@
 import { redirect } from "next/navigation";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
-import { prisma } from "@/lib/prisma";
 import Link from "next/link";
 
-export default async function AdminHome() {
-  // 1) Kræv login (middleware burde fange det, men vi dobbelttjekker)
+export default async function AdminPage() {
+  // 1) Kræv login
   const session = await getServerSession(authOptions);
   const email = session?.user?.email ?? null;
+
   if (!email) {
-    redirect(`/admin/login?next=/admin`);
+    // ikke logget ind → send til admin-login
+    redirect("/admin/login?callbackUrl=/admin");
   }
 
-  // 2) Tjek admin i DB
-  const admin = await prisma.admin.findUnique({
-    where: { email },
-    select: { email: true, role: true, createdAt: true },
-  });
-
-  if (!admin) {
-    // Ikke admin → forsiden (middleware burde også have taget den)
+  // 2) Kun den ene admin-bruger må se siden
+  if (email !== "admin@hunvaelger.dk") {
     redirect("/");
   }
 
@@ -29,8 +24,7 @@ export default async function AdminHome() {
     <main className="mx-auto max-w-3xl px-4 py-10">
       <h1 className="text-3xl font-semibold mb-2">Admin dashboard</h1>
       <p className="text-sm text-gray-500 mb-8">
-        Logget ind som <span className="font-medium">{admin.email}</span>{" "}
-        ({admin.role ?? "ADMIN"})
+        Logget ind som <span className="font-medium">{email}</span> (ADMIN)
       </p>
 
       <div className="grid gap-4 md:grid-cols-2">
@@ -50,7 +44,7 @@ export default async function AdminHome() {
         <section className="rounded-xl border p-4">
           <h2 className="font-semibold mb-2">Admin-brugere</h2>
           <p className="text-sm text-gray-600 mb-3">
-            (Kun MASTER) Tilføj eller fjern andre admin-brugere.
+            (Senere) administration af flere admin-brugere.
           </p>
           <Link
             href="/admin/admins"
@@ -63,7 +57,7 @@ export default async function AdminHome() {
         <section className="rounded-xl border p-4">
           <h2 className="font-semibold mb-2">Upload & billeder</h2>
           <p className="text-sm text-gray-600 mb-3">
-            Overblik over uploadede profilbilleder (senere).
+            Overblik over uploadede profilbilleder (kommer senere).
           </p>
           <Link
             href="/admin/uploads"
