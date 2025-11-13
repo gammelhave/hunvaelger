@@ -1,5 +1,8 @@
 'use client';
 
+export const dynamic = 'force-dynamic';      // <- forhindrer prerender/SSG
+export const fetchCache = 'force-no-store';  // <- ingen caching i edge/build
+
 import { useEffect, useMemo, useState } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { signIn, signOut, useSession } from 'next-auth/react';
@@ -14,7 +17,6 @@ export default function AdminLoginPage() {
   const [password, setPassword] = useState('');
   const [err, setErr] = useState<string | null>(sp.get('err'));
 
-  // Hvis brugeren allerede er logget ind, tjek om det er en admin – og redirect
   useEffect(() => {
     if (status !== 'authenticated') return;
 
@@ -26,7 +28,6 @@ export default function AdminLoginPage() {
           if (res.ok) {
             router.replace(nextUrl);
           } else {
-            // Ikke admin → log ud og vis fejl
             setErr('Din konto har ikke admin-rettigheder.');
             await signOut({ redirect: false });
           }
@@ -39,7 +40,6 @@ export default function AdminLoginPage() {
     return () => { cancelled = true; };
   }, [status, nextUrl, router]);
 
-  // Loader-state
   if (status === 'authenticated') {
     return (
       <div className="min-h-screen grid place-items-center">
@@ -50,14 +50,13 @@ export default function AdminLoginPage() {
     );
   }
 
-  // Ikke logget ind → vis formular
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErr(null);
     const res = await signIn('credentials', {
       email,
       password,
-      redirect: false, // vi håndterer selv redirect når session bliver authenticated
+      redirect: false,
     });
     if (res?.error) setErr('Forkert email eller adgangskode.');
   };
