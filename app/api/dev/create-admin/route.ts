@@ -12,12 +12,12 @@ export async function POST(req: Request) {
       return new NextResponse("Unauthorized", { status: 401 });
     }
 
-    // Forsøg at læse JSON-body, men lad det være valgfrit
+    // Body er valgfri – vi bruger defaults hvis der ikke sendes noget
     let data: any = {};
     try {
       data = await req.json();
     } catch {
-      // ingen body er ok – så bruger vi defaults nedenfor
+      // ingen body er ok
     }
 
     const email = data.email ?? "admin@hunvaelger.dk";
@@ -31,7 +31,6 @@ export async function POST(req: Request) {
     // Find eksisterende bruger
     const existing = await prisma.user.findUnique({ where: { email } });
     if (existing) {
-      // Hvis den allerede findes, er det stadig "ok"
       return NextResponse.json({
         ok: true,
         user: existing,
@@ -42,11 +41,11 @@ export async function POST(req: Request) {
     // Hash password
     const passwordHash = await bcrypt.hash(password, 10);
 
-    // Opret ny admin-bruger
+    // VIGTIGT: gem i feltet "password" (som Prisma kræver)
     const user = await prisma.user.create({
       data: {
         email,
-        passwordHash,
+        password: passwordHash, // HER matcher vi schemaet
         name,
       },
     });
@@ -58,7 +57,6 @@ export async function POST(req: Request) {
       {
         ok: false,
         error: err?.message ?? "Unknown error",
-        // det her er kun til dev – route ligger i /api/dev, så det er fint
         stack: String(err),
       },
       { status: 500 }
