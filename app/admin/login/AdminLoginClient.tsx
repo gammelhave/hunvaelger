@@ -2,7 +2,7 @@
 
 import React, { useState, FormEvent } from "react";
 import { signIn } from "next-auth/react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 
 export default function AdminLoginClient() {
   const [email, setEmail] = useState("admin@hunvaelger.dk");
@@ -11,8 +11,6 @@ export default function AdminLoginClient() {
   const [error, setError] = useState<string | null>(null);
 
   const router = useRouter();
-  const searchParams = useSearchParams();
-  const callbackUrl = searchParams.get("callbackUrl") || "/admin";
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -23,7 +21,6 @@ export default function AdminLoginClient() {
       redirect: false,
       email,
       password,
-      callbackUrl,
     });
 
     setLoading(false);
@@ -38,7 +35,8 @@ export default function AdminLoginClient() {
       return;
     }
 
-    router.push(callbackUrl);
+    // Succes: send til /admin
+    router.push("/admin");
   }
 
   return (
