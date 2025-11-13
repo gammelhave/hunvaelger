@@ -1,110 +1,95 @@
-'use client';
+"use client";
 
-import { useEffect, useMemo, useState } from 'react';
-import { useSearchParams, useRouter } from 'next/navigation';
-import { signIn, signOut, useSession } from 'next-auth/react';
+import { FormEvent, useState } from "react";
+import { signIn } from "next-auth/react";
+import { useRouter, useSearchParams } from "next/navigation";
 
 export default function AdminLoginClient() {
-  const { status } = useSession(); // 'loading' | 'authenticated' | 'unauthenticated'
+  const [email, setEmail] = useState("admin@hunvaelger.dk");
+  const [password, setPassword] = useState("Telefon1");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
   const router = useRouter();
-  const sp = useSearchParams();
-  const nextUrl = useMemo(() => sp.get('next') || '/admin', [sp]);
+  const searchParams = useSearchParams();
+  const callbackUrl = searchParams.get("callbackUrl") || "/admin";
 
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [err, setErr] = useState<string | null>(sp.get('err'));
-
-  // Når man ER logget ind → tjek om brugeren er admin
-  useEffect(() => {
-    if (status !== 'authenticated') return;
-
-    let cancelled = false;
-    (async () => {
-      try {
-        const res = await fetch('/api/admin/_am_i_admin', { credentials: 'include' });
-        if (!cancelled) {
-          if (res.ok) {
-            router.replace(nextUrl);
-          } else {
-            setErr('Din konto har ikke admin-rettigheder.');
-            await signOut({ redirect: false });
-          }
-        }
-      } catch {
-        if (!cancelled) setErr('Kunne ikke verificere admin-rettigheder.');
-      }
-    })();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [status, nextUrl, router]);
-
-  // Mens vi tjekker admin
-  if (status === 'authenticated') {
-    return (
-      <div className="min-h-screen grid place-items-center">
-        <div className="text-center">
-          <div className="animate-pulse mb-2">Tjekker admin-adgang…</div>
-        </div>
-      </div>
-    );
-  }
-
-  const onSubmit = async (e: React.FormEvent) => {
+  async function handleSubmit(e: FormEvent) {
     e.preventDefault();
-    setErr(null);
-    const res = await signIn('credentials', {
+    setError(null);
+    setLoading(true);
+
+    const res = await signIn("credentials", {
+      redirect: false,
       email,
       password,
-      redirect: false,
+      callbackUrl,
     });
-    if (res?.error) setErr('Forkert email eller adgangskode.');
-  };
+
+    setLoading(false);
+
+    if (!res) {
+      setError("Noget gik galt. Prøv igen.");
+      return;
+    }
+
+    if (res.error) {
+      setError("Forkert email eller adgangskode.");
+      return;
+    }
+
+    // success
+    router.push(callbackUrl);
+  }
 
   return (
-    <div className="min-h-screen grid place-items-center p-6">
-      <div className="w-full max-w-md rounded-2xl shadow p-6 bg-white">
-        <h1 className="text-xl font-semibold mb-4">Admin login</h1>
+    <div className="w-full max-w-md bg-white shadow-lg rounded-2xl p-8">
+      <h1 className="text-2xl font-bold mb-4 text-center">Admin login</h1>
+      <p className="text-sm text-gray-500 mb-6 text-center">
+        Log ind med din admin-konto for at se og eksportere profiler.
+      </p>
 
-        {err && (
-          <div className="mb-4 rounded bg-red-50 text-red-700 p-3 text-sm">
-            {err}
-          </div>
+      <form onSubmit={handleSubmit} className="space-y-4">
+        <div>
+          <label className="block text-sm font-medium mb-1" htmlFor="email">
+            Email
+          </label>
+          <input
+            id="email"
+            type="email"
+            autoComplete="email"
+            className="w-full rounded-md border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-pink-400"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+          />
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium mb-1" htmlFor="password">
+            Adgangskode
+          </label>
+          <input
+            id="password"
+            type="password"
+            autoComplete="current-password"
+            className="w-full rounded-md border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-pink-400"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+          />
+        </div>
+
+        {error && (
+          <p className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-md px-3 py-2">
+            {error}
+          </p>
         )}
 
-        <form onSubmit={onSubmit} className="space-y-4">
-          <div>
-            <label className="block text-sm mb-1">Email</label>
-            <input
-              type="email"
-              className="w-full border rounded px-3 py-2"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              autoComplete="email"
-              required
-            />
-          </div>
-          <div>
-            <label className="block text-sm mb-1">Adgangskode</label>
-            <input
-              type="password"
-              className="w-full border rounded px-3 py-2"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              autoComplete="current-password"
-              required
-            />
-          </div>
-
-          <button
-            type="submit"
-            className="w-full bg-pink-600 hover:bg-pink-700 text-white rounded px-4 py-2"
-          >
-            Log ind
-          </button>
-        </form>
-      </div>
+        <button
+          type="submit"
+          disabled={loading}
+          className="w-full rounded-md bg-pink-500 hover:bg-pink-600 text-white font-semibold py-2 text-sm disabled:opacity-60"
+        </button>
+      </form>
     </div>
   );
 }
