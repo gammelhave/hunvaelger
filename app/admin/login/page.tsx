@@ -1,10 +1,14 @@
-// app/admin/login/page.tsx
+import AdminLoginClient from "./AdminLoginClient";
 
-export const dynamic = 'force-dynamic';
-export const fetchCache = 'force-no-store';
-
-import AdminLoginClient from './AdminLoginClient';
+export const metadata = {
+  title: "Admin login – HunVælger",
+};
 
 export default function AdminLoginPage() {
-  return <AdminLoginClient />;
+  // Ren server-komponent der bare viser client-login
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-pink-50">
+      <AdminLoginClient />
+    </div>
+  );
 }
