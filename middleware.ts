@@ -3,53 +3,42 @@ import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { getToken } from "next-auth/jwt";
 
-const ADMIN_PREFIX = "/admin";
-
-// Paths der IKKE må beskyttes af admin-krav
-const PUBLIC_ADMIN_PATHS = new Set<string>([
-  "/admin/login",                 // admin login-side
-]);
-
-// Generelt offentlige ting
-function isPublic(req: NextRequest) {
-  const p = req.nextUrl.pathname;
-  if (!p.startsWith(ADMIN_PREFIX)) return true;                    // alt udenfor /admin er offentligt
-  if (PUBLIC_ADMIN_PATHS.has(p)) return true;                      // whitelist
-  if (p.startsWith("/_next")) return true;                         // Next assets
-  if (p === "/favicon.ico" || p === "/robots.txt") return true;
-  // offentlige auth- og helper-endpoints
-  if (p.startsWith("/api/auth")) return true;
-  if (p === "/api/admin/_am_i_admin") return true;
-  return false;
-}
-
 export async function middleware(req: NextRequest) {
-  const { pathname, origin } = req.nextUrl;
+  const { pathname } = req.nextUrl;
 
-  // Offentlige ruter kører bare videre
-  if (isPublic(req)) return NextResponse.next();
-
-  // Herfra: kun /admin/* der IKKE er whitelisted
-
-  // 1) Kræv login
-  const token = await getToken({ req });
-  if (!token?.email) {
-    const url = new URL("/admin/login", origin);
-    url.searchParams.set("next", pathname);
-    return NextResponse.redirect(url);
+  // Kør kun logik på /admin-ruter
+  if (!pathname.startsWith("/admin")) {
+    return NextResponse.next();
   }
 
-  // 2) Billigt admin-tjek (kaldes som logged-in med cookies)
-  const res = await fetch(new URL("/api/admin/_am_i_admin", origin), {
-    headers: { cookie: req.headers.get("cookie") ?? "" },
+  // Admin-login siden skal ALTID være åben
+  if (pathname === "/admin/login") {
+    return NextResponse.next();
+  }
+
+  // Tjek login via NextAuth JWT
+  const token = await getToken({
+    req,
+    secret: process.env.NEXTAUTH_SECRET,
   });
 
-  if (res.ok) return NextResponse.next();
+  // Hvis ikke logget ind → send til admin-login
+  if (!token || !token.email) {
+    const loginUrl = new URL("/admin/login", req.url);
+    loginUrl.searchParams.set("callbackUrl", pathname);
+    return NextResponse.redirect(loginUrl);
+  }
 
-  // 3) Ikke admin → forsiden
-  return NextResponse.redirect(new URL("/", origin));
+  // Kun admin-mailen må se /admin-området
+  if (token.email !== "admin@hunvaelger.dk") {
+    return NextResponse.redirect(new URL("/", req.url));
+  }
+
+  // Alt ok → fortsæt
+  return NextResponse.next();
 }
 
+// Matcher kun /admin/*
 export const config = {
-  matcher: ["/admin/:path*", "/api/:path*"], // lad middleware fange admin og API-calls
+  matcher: ["/admin/:path*"],
 };
