@@ -63,7 +63,9 @@ export const authOptions: NextAuthOptions = {
     },
     async session({ session, token }) {
       if (token?.email) {
+        // @ts-expect-error – vi ved godt, at user findes
         session.user = session.user || {};
+        // @ts-expect-error
         session.user.email = token.email as string;
       }
       return session;
