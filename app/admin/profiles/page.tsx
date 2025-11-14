@@ -27,6 +27,7 @@ export default function AdminProfilesPage() {
         if (!res.ok) {
           throw new Error("Kunne ikke hente profiler");
         }
+
         const data = await res.json();
 
         // Forventet format: { ok: true, profiles: [...] }
@@ -57,18 +58,40 @@ export default function AdminProfilesPage() {
     });
   }, [profiles, search]);
 
+  async function handleCreateTestProfile() {
+    const yes = window.confirm("Opret en testprofil?");
+    if (!yes) return;
+
+    try {
+      const res = await fetch("/api/admin/profiles/create-test", {
+        method: "POST",
+      });
+
+      if (!res.ok) {
+        alert("Kunne ikke oprette testprofil");
+        return;
+      }
+
+      // Reload siden for at hente nye profiler
+      window.location.reload();
+    } catch (err) {
+      console.error(err);
+      alert("Teknisk fejl ved oprettelse af testprofil");
+    }
+  }
+
   return (
     <main className="mx-auto max-w-5xl px-4 py-10">
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-6">
         <div>
           <h1 className="text-2xl font-semibold">Profiler</h1>
           <p className="text-sm text-gray-500">
-            Overblik over alle profiler i systemet. Du kan søge og eksportere
-            listen.
+            Overblik over alle profiler i systemet. Du kan søge, oprette en
+            testprofil og eksportere listen.
           </p>
         </div>
 
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           <input
             type="text"
             placeholder="Søg i navn eller bio…"
@@ -76,10 +99,18 @@ export default function AdminProfilesPage() {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
-          {/* Eksport-knap peger på eksisterende /api/admin/export */}
+
+          <button
+            type="button"
+            onClick={handleCreateTestProfile}
+            className="rounded-md bg-gray-600 hover:bg-gray-700 text-white text-sm font-semibold px-4 py-2"
+          >
+            Opret testprofil
+          </button>
+
           <a
             href="/api/admin/export"
-            className="rounded-md bg-pink-500 hover:bg-pink-600 text-white text-sm font-semibold px-4 py-2 self-stretch flex items-center justify-center"
+            className="rounded-md bg-pink-500 hover:bg-pink-600 text-white text-sm font-semibold px-4 py-2 flex items-center justify-center"
           >
             Eksporter CSV
           </a>
@@ -112,7 +143,10 @@ export default function AdminProfilesPage() {
             </thead>
             <tbody>
               {filtered.map((p) => (
-                <tr key={p.id} className="border-b last:border-b-0 hover:bg-gray-50">
+                <tr
+                  key={p.id}
+                  className="border-b last:border-b-0 hover:bg-gray-50"
+                >
                   <td className="p-2">{p.name ?? "-"}</td>
                   <td className="p-2">{p.age ?? "-"}</td>
                   <td className="p-2 max-w-xs truncate" title={p.bio ?? ""}>
@@ -124,7 +158,6 @@ export default function AdminProfilesPage() {
                       : "-"}
                   </td>
                   <td className="p-2">
-                    {/* Vi laver /admin/profiles/[id] i næste del */}
                     <Link
                       href={`/admin/profiles/${p.id}`}
                       className="text-pink-600 hover:underline"
