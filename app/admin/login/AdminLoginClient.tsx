@@ -35,7 +35,7 @@ export default function AdminLoginClient() {
       return;
     }
 
-    // Succes: send til /admin
+    // Succes → send til /admin
     router.push("/admin");
   }
 
@@ -49,10 +49,7 @@ export default function AdminLoginClient() {
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label
-              className="block text-sm font-medium mb-1"
-              htmlFor="email"
-            >
+            <label className="block text-sm font-medium mb-1" htmlFor="email">
               Email
             </label>
             <input
