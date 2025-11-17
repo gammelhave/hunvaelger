@@ -60,17 +60,17 @@ export async function POST(req: Request) {
       );
     }
 
-    const hash = await bcrypt.hash(password, 10);
+    const passwordHash = await bcrypt.hash(password, 10);
     const fallbackName =
-      name ??
-      (email.includes("@") ? email.split("@")[0] : "Bruger");
+      name ?? (email.includes("@") ? email.split("@")[0] : "Bruger");
 
-    // Opret bruger + (valgfri) profil i én transaktion
+    // Opret bruger + profil i én transaktion
     const result = await prisma.$transaction(async (tx) => {
       const user = await tx.user.create({
         data: {
           email,
-          password: hash,
+          // VIGTIGT: gem under passwordHash, ikke password
+          passwordHash,
         },
       });
 
