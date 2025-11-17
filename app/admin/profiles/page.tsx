@@ -3,22 +3,25 @@
 
 import { useEffect, useState } from "react";
 
-export default function AdminProfilesPage() {
-  type Profile = {
-    id: string;
-    name: string;
-    age: number | null;
-    bio: string | null;
-    createdAt: string;
-  };
+type Profile = {
+  id: string;
+  name?: string | null;
+  age?: number | null;
+  bio?: string | null;
+  createdAt?: string;
+};
 
+export default function AdminProfilesPage() {
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // Hent profiler fra API
   async function loadProfiles() {
     try {
       const res = await fetch("/api/admin/profiles", { cache: "no-store" });
+      if (!res.ok) {
+        console.error("FEJL ved /api/admin/profiles:", res.status);
+        return;
+      }
       const data = await res.json();
       setProfiles(data.profiles || []);
     } catch (err) {
@@ -32,35 +35,6 @@ export default function AdminProfilesPage() {
     loadProfiles();
   }, []);
 
-  // Opret testprofil
-  async function handleCreateTestProfile() {
-    const yes = window.confirm("Opret en testprofil?");
-    if (!yes) return;
-
-    try {
-      const res = await fetch("/api/admin/profiles/create-test", {
-        method: "POST",
-      });
-
-      if (!res.ok) {
-        const text = await res.text();
-        console.error(
-          "CREATE-TEST ERROR:",
-          res.status,
-          text
-        );
-        alert("Kunne ikke oprette testprofil");
-        return;
-      }
-
-      window.location.reload(); // hent igen
-    } catch (err) {
-      console.error("CREATE-TEST FETCH ERROR:", err);
-      alert("Teknisk fejl ved oprettelse af testprofil");
-    }
-  }
-
-  // Eksporter CSV
   async function handleExportCSV() {
     try {
       const res = await fetch("/api/admin/export");
@@ -70,8 +44,6 @@ export default function AdminProfilesPage() {
       }
 
       const csv = await res.text();
-
-      // download CSV
       const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
       const url = window.URL.createObjectURL(blob);
 
@@ -80,8 +52,8 @@ export default function AdminProfilesPage() {
       link.download = "profiler.csv";
       link.click();
     } catch (err) {
+      console.error("Fejl ved CSV eksport:", err);
       alert("Fejl ved CSV eksport");
-      console.error(err);
     }
   }
 
@@ -90,19 +62,11 @@ export default function AdminProfilesPage() {
       <h1 className="text-3xl font-semibold mb-5">Profiler</h1>
 
       <p className="text-gray-600 mb-8">
-        Overblik over alle profiler i systemet. Du kan søge, oprette en testprofil
-        og eksportere listen som CSV.
+        Overblik over alle profiler i systemet. Du kan eksportere listen som
+        CSV og (senere) gå til detaljer/sletning pr. profil.
       </p>
 
-      {/* Actions */}
       <div className="flex gap-3 mb-8">
-        <button
-          onClick={handleCreateTestProfile}
-          className="rounded bg-pink-600 px-4 py-2 text-white hover:bg-pink-700"
-        >
-          Opret testprofil
-        </button>
-
         <button
           onClick={handleExportCSV}
           className="rounded bg-pink-500 px-4 py-2 text-white hover:bg-pink-600"
@@ -111,30 +75,34 @@ export default function AdminProfilesPage() {
         </button>
       </div>
 
-      {/* Loading */}
       {loading && <p className="text-gray-500">Indlæser profiler…</p>}
 
-      {/* Ingen profiler */}
       {!loading && profiles.length === 0 && (
         <p>Der er endnu ingen profiler.</p>
       )}
 
-      {/* Liste over profiler */}
-      <div className="space-y-4">
-        {profiles.map((p) => (
-          <div
-            key={p.id}
-            className="rounded border p-4 hover:bg-gray-50 transition"
-          >
-            <h2 className="font-semibold text-lg">{p.name}</h2>
-            <p className="text-gray-600 text-sm">
-              Alder: {p.age ?? "ukendt"} · Oprettet:{" "}
-              {new Date(p.createdAt).toLocaleDateString()}
-            </p>
-            {p.bio && <p className="mt-2 text-gray-800">{p.bio}</p>}
-          </div>
-        ))}
-      </div>
+      {!loading && profiles.length > 0 && (
+        <div className="space-y-4">
+          {profiles.map((p) => (
+            <div
+              key={p.id}
+              className="rounded border p-4 hover:bg-gray-50 transition"
+            >
+              <h2 className="font-semibold text-lg">{p.name ?? "Uden navn"}</h2>
+              <p className="text-gray-600 text-sm mb-1">
+                Alder: {p.age ?? "ukendt"}
+              </p>
+              {p.bio && <p className="mt-1 text-gray-800">{p.bio}</p>}
+              <p className="text-gray-400 text-xs mt-2">
+                Oprettet:{" "}
+                {p.createdAt
+                  ? new Date(p.createdAt).toLocaleString("da-DK")
+                  : "-"}
+              </p>
+            </div>
+          ))}
+        </div>
+      )}
     </main>
   );
 }
