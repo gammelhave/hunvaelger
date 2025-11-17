@@ -1,50 +1,29 @@
-import NextAuth, { NextAuthOptions } from "next-auth";
-import CredentialsProvider from "next-auth/providers/credentials";
+import NextAuth from "next-auth";
+import Credentials from "next-auth/providers/credentials";
 import { prisma } from "@/lib/prisma";
 import bcrypt from "bcryptjs";
 
-export const authOptions: NextAuthOptions = {
-  session: {
-    strategy: "jwt",
-  },
-  pages: {
-    signIn: "/admin/login",
-  },
+const handler = NextAuth({
   providers: [
-    CredentialsProvider({
+    Credentials({
       name: "Credentials",
       credentials: {
-        email: { label: "Email", type: "email" },
-        password: { label: "Password", type: "password" },
+        email: {},
+        password: {},
       },
       async authorize(credentials) {
-        if (!credentials?.email || !credentials?.password) {
-          throw new Error("Missing email or password");
-        }
+        if (!credentials?.email || !credentials?.password) return null;
 
-        // Find bruger i databasen
         const user = await prisma.user.findUnique({
-          where: { email: credentials.email },
+          where: { email: credentials.email.toLowerCase() },
         });
 
-        if (!user) {
-          throw new Error("Invalid credentials");
-        }
+        if (!user) return null;
 
-        // password-feltet indeholder bcrypt-hashen
-        const isValid = await bcrypt.compare(
-          credentials.password,
-          user.password
-        );
+        // VIGTIGT: brug `user.password`
+        const valid = await bcrypt.compare(credentials.password, user.password);
 
-        if (!isValid) {
-          throw new Error("Invalid credentials");
-        }
-
-        // Kun admin-mailen får lov til at logge ind
-        if (user.email !== "admin@hunvaelger.dk") {
-          throw new Error("Not an admin");
-        }
+        if (!valid) return null;
 
         return {
           id: user.id,
@@ -53,26 +32,12 @@ export const authOptions: NextAuthOptions = {
       },
     }),
   ],
-  callbacks: {
-    async jwt({ token, user }) {
-      if (user) {
-        token.email = user.email;
-        token.sub = user.id;
-      }
-      return token;
-    },
-    async session({ session, token }) {
-      if (token?.email) {
-        // @ts-expect-error – vi ved godt, at user findes
-        session.user = session.user || {};
-        // @ts-expect-error
-        session.user.email = token.email as string;
-      }
-      return session;
-    },
+  session: {
+    strategy: "jwt",
   },
-};
-
-const handler = NextAuth(authOptions);
+  pages: {
+    signIn: "/login",
+  },
+});
 
 export { handler as GET, handler as POST };
