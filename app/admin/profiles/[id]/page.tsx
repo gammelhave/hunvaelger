@@ -1,169 +1,152 @@
-"use client";
+// app/admin/profiles/[id]/page.tsx
+import { prisma } from "@/lib/prisma";
+import { authOptions } from "@/app/api/auth/[...nextauth]/route";
+import { getServerSession } from "next-auth";
+import { notFound, redirect } from "next/navigation";
 
-import { useEffect, useState } from "react";
-import { useParams, useRouter } from "next/navigation";
-import Link from "next/link";
+interface PageProps {
+  params: { id: string };
+}
 
-type Profile = {
-  id: string;
-  name?: string | null;
-  age?: number | null;
-  bio?: string | null;
-  createdAt?: string;
-};
+// Server-action til at slette profilen
+async function deleteProfileAction(profileId: string) {
+  "use server";
 
-export default function AdminProfileDetailPage() {
-  const params = useParams<{ id: string }>();
-  const router = useRouter();
-  const id = params.id;
+  const session = await getServerSession(authOptions as any);
+  const email = session?.user?.email ?? null;
 
-  const [profile, setProfile] = useState<Profile | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [deleting, setDeleting] = useState(false);
-  const [deleteError, setDeleteError] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (!id) return;
-
-    async function load() {
-      try {
-        setLoading(true);
-        setError(null);
-
-        const res = await fetch(`/api/admin/profiles/${id}`);
-        if (!res.ok) {
-          throw new Error("Kunne ikke hente profil");
-        }
-        const data = await res.json();
-        if (!data?.ok || !data.profile) {
-          throw new Error(data?.error ?? "Profil ikke fundet");
-        }
-
-        setProfile(data.profile);
-      } catch (e: any) {
-        console.error(e);
-        setError(e?.message ?? "Ukendt fejl");
-      } finally {
-        setLoading(false);
-      }
-    }
-
-    load();
-  }, [id]);
-
-  async function handleDelete() {
-    if (!profile) return;
-    const yes = window.confirm(
-      `Er du sikker på, at du vil slette profilen "${profile.name ?? profile.id}"?\nDenne handling kan ikke fortrydes.`
-    );
-    if (!yes) return;
-
-    try {
-      setDeleting(true);
-      setDeleteError(null);
-
-      const res = await fetch(`/api/admin/profiles/${profile.id}`, {
-        method: "DELETE",
-      });
-
-      if (!res.ok) {
-        const data = await res.json().catch(() => null);
-        throw new Error(data?.error ?? "Kunne ikke slette profilen");
-      }
-
-      // Tilbage til oversigten
-      router.push("/admin/profiles");
-    } catch (e: any) {
-      console.error(e);
-      setDeleteError(e?.message ?? "Ukendt fejl ved sletning");
-    } finally {
-      setDeleting(false);
-    }
+  if (!email) {
+    throw new Error("Ikke autoriseret");
   }
 
-  return (
-    <main className="mx-auto max-w-3xl px-4 py-10">
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h1 className="text-2xl font-semibold">Profil-detaljer</h1>
-          <p className="text-sm text-gray-500">
-            Se oplysninger om den valgte profil og slet den om nødvendigt.
-          </p>
-        </div>
+  const admin = await prisma.admin.findUnique({
+    where: { email },
+  });
 
-        <Link
-          href="/admin/profiles"
-          className="rounded-md border px-3 py-2 text-sm hover:bg-gray-50"
-        >
-          ← Tilbage til profiler
-        </Link>
+  if (!admin) {
+    throw new Error("Ikke autoriseret");
+  }
+
+  // Slet profilen (brugeren får lov at blive – vi sletter kun profilen)
+  await prisma.profile.delete({
+    where: { id: profileId },
+  });
+
+  redirect("/admin/profiles");
+}
+
+export default async function AdminProfileDetailPage({ params }: PageProps) {
+  const profileId = params.id;
+
+  const session = await getServerSession(authOptions as any);
+  const email = session?.user?.email ?? null;
+
+  if (!email) {
+    redirect(`/admin/login?next=/admin/profiles/${profileId}`);
+  }
+
+  const admin = await prisma.admin.findUnique({
+    where: { email },
+  });
+
+  if (!admin) {
+    redirect("/");
+  }
+
+  const profile = await prisma.profile.findUnique({
+    where: { id: profileId },
+  });
+
+  if (!profile) {
+    notFound();
+  }
+
+  // Hent evt. tilknyttet bruger for at vise email
+  const user = await prisma.user.findUnique({
+    where: { id: profile.userId },
+  });
+
+  return (
+    <main className="mx-auto max-w-2xl px-4 py-10">
+      <h1 className="text-3xl font-semibold mb-4">Profil-detaljer</h1>
+
+      <div className="mb-6 text-sm text-gray-500">
+        <p>
+          <span className="font-medium">Profil-ID:</span>{" "}
+          <span className="font-mono">{profile.id}</span>
+        </p>
+        {user && (
+          <p>
+            <span className="font-medium">Bruger-email:</span>{" "}
+            {user.email}
+          </p>
+        )}
       </div>
 
-      {loading && <p>Henter profil…</p>}
-
-      {error && (
-        <p className="text-red-600 bg-red-50 border border-red-100 rounded-md px-3 py-2 mb-4 text-sm">
-          {error}
-        </p>
-      )}
-
-      {!loading && !error && !profile && (
-        <p className="text-gray-600">Profil ikke fundet.</p>
-      )}
-
-      {!loading && !error && profile && (
-        <div className="space-y-4">
-          <div className="rounded-xl border p-4 bg-white">
-            <h2 className="text-lg font-semibold mb-2">
-              {profile.name ?? "(uden navn)"}{" "}
-              <span className="text-sm text-gray-500">
-                #{profile.id.slice(0, 8)}
-              </span>
-            </h2>
-
-            <dl className="space-y-2 text-sm">
-              <div>
-                <dt className="font-medium text-gray-600">Navn</dt>
-                <dd>{profile.name ?? "-"}</dd>
-              </div>
-              <div>
-                <dt className="font-medium text-gray-600">Alder</dt>
-                <dd>{profile.age ?? "-"}</dd>
-              </div>
-              <div>
-                <dt className="font-medium text-gray-600">Bio</dt>
-                <dd className="whitespace-pre-line">
-                  {profile.bio ?? "-"}
-                </dd>
-              </div>
-              <div>
-                <dt className="font-medium text-gray-600">Oprettet</dt>
-                <dd>
-                  {profile.createdAt
-                    ? new Date(profile.createdAt).toLocaleString("da-DK")
-                    : "-"}
-                </dd>
-              </div>
-            </dl>
-          </div>
-
-          {deleteError && (
-            <p className="text-red-600 bg-red-50 border border-red-100 rounded-md px-3 py-2 text-sm">
-              {deleteError}
-            </p>
-          )}
-
-          <button
-            type="button"
-            onClick={handleDelete}
-            disabled={deleting}
-            className="rounded-md bg-red-600 hover:bg-red-700 text-white text-sm font-semibold px-4 py-2 disabled:opacity-60"
-          >
-            {deleting ? "Sletter…" : "Slet profil"}
-          </button>
+      <div className="space-y-3 mb-8">
+        <div>
+          <div className="text-xs uppercase text-gray-500">Navn</div>
+          <div className="text-base">{profile.name}</div>
         </div>
-      )}
+        <div>
+          <div className="text-xs uppercase text-gray-500">Alder</div>
+          <div className="text-base">
+            {typeof profile.age === "number" && profile.age > 0
+              ? profile.age
+              : "-"}
+          </div>
+        </div>
+        <div>
+          <div className="text-xs uppercase text-gray-500">Beskrivelse</div>
+          <div className="text-base whitespace-pre-line">
+            {profile.bio ?? "(ingen tekst)"}
+          </div>
+        </div>
+        <div>
+          <div className="text-xs uppercase text-gray-500">Billeder</div>
+          {Array.isArray(profile.images) && profile.images.length > 0 ? (
+            <ul className="list-disc ml-5 text-sm break-all">
+              {profile.images.map((url: string, i: number) => (
+                <li key={i}>{url}</li>
+              ))}
+            </ul>
+          ) : (
+            <div className="text-sm text-gray-400">Ingen billeder gemt.</div>
+          )}
+        </div>
+      </div>
+
+      <div className="flex items-center justify-between gap-4">
+        <a
+          href="/admin/profiles"
+          className="inline-flex items-center rounded-md bg-gray-100 px-4 py-2 text-sm font-medium hover:bg-gray-200"
+        >
+          ← Tilbage til profiler
+        </a>
+
+        <form
+          action={async () => {
+            "use server";
+            await deleteProfileAction(profileId);
+          }}
+        >
+          <button
+            type="submit"
+            className="inline-flex items-center rounded-md bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700"
+            onClick={(e) => {
+              if (
+                !confirm(
+                  "Er du sikker på, at du vil slette denne profil? Dette kan ikke fortrydes."
+                )
+              ) {
+                e.preventDefault();
+              }
+            }}
+          >
+            Slet profil
+          </button>
+        </form>
+      </div>
     </main>
   );
 }
