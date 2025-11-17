@@ -1,12 +1,12 @@
+// middleware.ts
 import { NextResponse } from "next/server";
-import type { NextRequest } from "next/server";
 
-export function middleware(_req: NextRequest) {
-  // Middleware er midlertidigt slået fra
+// Ingen logik – bare lad alt passere
+export function middleware() {
   return NextResponse.next();
 }
 
-// Ingen matcher = ingen ruter bruger middleware
+// Tom matcher = middleware kører slet ikke
 export const config = {
   matcher: [],
 };
