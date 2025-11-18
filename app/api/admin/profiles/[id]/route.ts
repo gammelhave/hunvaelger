@@ -2,17 +2,24 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 
-type Params = {
+type RouteContext = {
   params: { id: string };
 };
 
-// Hent én profil
-export async function GET(_req: Request, { params }: Params) {
-  const id = params.id;
-
+// GET /api/admin/profiles/:id
+export async function GET(req: Request, { params }: RouteContext) {
   try {
+    const id = params.id;
+
     const profile = await prisma.profile.findUnique({
       where: { id },
+      include: {
+        user: {
+          select: {
+            email: true,
+          },
+        },
+      },
     });
 
     if (!profile) {
@@ -22,23 +29,39 @@ export async function GET(_req: Request, { params }: Params) {
       );
     }
 
-    return NextResponse.json({ ok: true, profile });
-  } catch (err) {
-    console.error("GET PROFILE ERROR:", err);
+    return NextResponse.json({
+      ok: true,
+      profile: {
+        id: profile.id,
+        name: profile.name,
+        age: profile.age,
+        bio: profile.bio,
+        email: profile.user?.email ?? null,
+      },
+    });
+  } catch (err: any) {
     return NextResponse.json(
-      { ok: false, error: "Fejl ved hentning af profil" },
+      {
+        ok: false,
+        error: "INTERNAL",
+        message: "Kunne ikke hente profil",
+        detail: err?.message ?? String(err),
+      },
       { status: 500 }
     );
   }
 }
 
-// Slet profil
-export async function DELETE(_req: Request, { params }: Params) {
-  const id = params.id;
-
+// DELETE /api/admin/profiles/:id
+export async function DELETE(req: Request, { params }: RouteContext) {
   try {
-    // Tjek først om den findes
-    const existing = await prisma.profile.findUnique({ where: { id } });
+    const id = params.id;
+
+    const existing = await prisma.profile.findUnique({
+      where: { id },
+      select: { id: true },
+    });
+
     if (!existing) {
       return NextResponse.json(
         { ok: false, error: "Profil ikke fundet" },
@@ -46,15 +69,18 @@ export async function DELETE(_req: Request, { params }: Params) {
       );
     }
 
-    await prisma.profile.delete({
-      where: { id },
-    });
+    // Foreløbig sletter vi kun profilen. (User kan evt. tages i brug senere)
+    await prisma.profile.delete({ where: { id } });
 
     return NextResponse.json({ ok: true });
-  } catch (err) {
-    console.error("DELETE PROFILE ERROR:", err);
+  } catch (err: any) {
     return NextResponse.json(
-      { ok: false, error: "Kunne ikke slette profil" },
+      {
+        ok: false,
+        error: "INTERNAL",
+        message: "Kunne ikke slette profil",
+        detail: err?.message ?? String(err),
+      },
       { status: 500 }
     );
   }
