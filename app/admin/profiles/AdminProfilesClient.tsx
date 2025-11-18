@@ -9,6 +9,7 @@ export default function AdminProfilesClient() {
   const { data: session, status } = useSession();
   const router = useRouter();
 
+  // Hvis ikke logget ind → send til admin/login med redirect tilbage
   useEffect(() => {
     if (status === "unauthenticated") {
       const next = encodeURIComponent("/admin/profiles");
@@ -26,7 +27,6 @@ export default function AdminProfilesClient() {
   }
 
   if (status === "unauthenticated") {
-    // Vi er på vej til login – kort besked
     return (
       <main className="mx-auto max-w-2xl px-4 py-10">
         <p>Sender dig til admin login…</p>
@@ -44,8 +44,7 @@ export default function AdminProfilesClient() {
         <span className="font-medium">{email}</span>.
       </p>
       <p className="mt-4">
-        Dette er den simple admin-profilside uden database endnu.
-        Når denne virker stabilt, kobler vi profil-listen og CSV-export på.
+        Denne side er nu en client-komponent via AdminProfilesClient.
       </p>
     </main>
   );
