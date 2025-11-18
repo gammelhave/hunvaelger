@@ -1,101 +1,179 @@
 // app/admin/profiles/[id]/page.tsx
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/app/api/auth/[...nextauth]/route";
-import { redirect, notFound } from "next/navigation";
-import { prisma } from "@/lib/prisma";
+"use client";
+
+import { useEffect, useState } from "react";
+import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 
-type Props = {
-  params: {
-    id: string;
-  };
+type AdminProfileDetail = {
+  id: string;
+  name: string | null;
+  age: number | null;
+  bio: string | null;
+  email: string | null;
 };
 
-export default async function AdminProfileDetailPage({ params }: Props) {
-  const session = await getServerSession(authOptions);
-  const email = session?.user?.email ?? null;
+export default function AdminProfileDetailPage() {
+  const params = useParams();
+  const router = useRouter();
+  const id = params?.id as string;
 
-  if (!email) {
-    redirect(`/admin/login?next=/admin/profiles/${params.id}`);
-  }
+  const [profile, setProfile] = useState<AdminProfileDetail | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
-  const profile = await prisma.profile.findUnique({
-    where: { id: params.id },
-    include: {
-      user: {
-        select: { email: true },
-      },
-    },
-  });
+  useEffect(() => {
+    if (!id) return;
 
-  if (!profile) {
-    notFound();
+    let cancelled = false;
+
+    async function load() {
+      try {
+        setLoading(true);
+        setError(null);
+
+        const res = await fetch(`/api/admin/profiles/${id}`, {
+          method: "GET",
+          cache: "no-store",
+        });
+
+        if (!res.ok) {
+          const txt = await res.text();
+          throw new Error(
+            `Fejl fra /api/admin/profiles/${id}: ${res.status} – ${txt}`
+          );
+        }
+
+        const data = await res.json();
+        if (!data.ok) {
+          throw new Error(data.error || "Ukendt fejl");
+        }
+
+        if (!cancelled) {
+          setProfile(data.profile);
+        }
+      } catch (err: any) {
+        if (!cancelled) {
+          setError(err?.message ?? String(err));
+        }
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
+        }
+      }
+    }
+
+    load();
+    return () => {
+      cancelled = true;
+    };
+  }, [id]);
+
+  async function handleDelete() {
+    if (!profile) return;
+
+    const sure = window.confirm(
+      `Er du sikker på, at du vil slette profilen "${profile.name ?? ""}"?`
+    );
+    if (!sure) return;
+
+    try {
+      setDeleting(true);
+      const res = await fetch(`/api/admin/profiles/${profile.id}`, {
+        method: "DELETE",
+      });
+
+      if (!res.ok) {
+        const txt = await res.text();
+        throw new Error(
+          `Fejl fra DELETE /api/admin/profiles/${profile.id}: ${res.status} – ${txt}`
+        );
+      }
+
+      const data = await res.json();
+      if (!data.ok) {
+        throw new Error(data.error || "Kunne ikke slette profil");
+      }
+
+      // Tilbage til liste
+      router.push("/admin/profiles");
+      router.refresh();
+    } catch (err: any) {
+      alert(err?.message ?? String(err));
+    } finally {
+      setDeleting(false);
+    }
   }
 
   return (
-    <main className="mx-auto max-w-2xl px-4 py-10">
-      <div className="mb-6 flex items-center justify-between gap-4">
-        <h1 className="text-3xl font-semibold">
-          Profil: {profile.name || "(uden navn)"}
-        </h1>
+    <main className="mx-auto max-w-3xl px-4 py-10">
+      <div className="mb-4">
         <Link
           href="/admin/profiles"
           className="text-sm text-pink-600 hover:underline"
         >
-          ← Tilbage til alle profiler
+          ← Tilbage til oversigten
         </Link>
       </div>
 
-      <div className="space-y-4 rounded-lg border border-gray-200 bg-white p-4">
-        <div>
-          <div className="text-xs font-semibold uppercase text-gray-500">
-            Navn
-          </div>
-          <div>{profile.name || "(uden navn)"}</div>
-        </div>
+      {loading && <p>Henter profil…</p>}
 
-        <div>
-          <div className="text-xs font-semibold uppercase text-gray-500">
-            Alder
-          </div>
-          <div>{profile.age ?? "–"}</div>
+      {error && (
+        <div className="mb-6 rounded border border-red-300 bg-red-50 px-4 py-3 text-sm text-red-700">
+          <p className="font-semibold">Kunne ikke hente profil.</p>
+          <p className="mt-1">Teknisk detalje: {error}</p>
         </div>
+      )}
 
-        <div>
-          <div className="text-xs font-semibold uppercase text-gray-500">
-            Email
-          </div>
-          <div>{profile.user?.email ?? "–"}</div>
-        </div>
+      {!loading && !error && !profile && (
+        <p>Profilen blev ikke fundet. (Måske er den allerede slettet.)</p>
+      )}
 
-        <div>
-          <div className="text-xs font-semibold uppercase text-gray-500">
-            Bio
-          </div>
-          <div className="whitespace-pre-wrap">
-            {profile.bio ?? "–"}
-          </div>
-        </div>
+      {!loading && !error && profile && (
+        <>
+          <h1 className="text-3xl font-semibold mb-4">
+            Admin – profil: {profile.name || "(uden navn)"}
+          </h1>
 
-        <div className="grid grid-cols-2 gap-4 text-xs text-gray-500">
-          <div>
-            <div className="font-semibold uppercase">Oprettet</div>
-            <div>{profile.createdAt.toLocaleString("da-DK")}</div>
-          </div>
-          <div>
-            <div className="font-semibold uppercase">Sidst opdateret</div>
-            <div>{profile.updatedAt.toLocaleString("da-DK")}</div>
-          </div>
-        </div>
-      </div>
+          <dl className="mb-8 space-y-2 text-sm">
+            <div>
+              <dt className="font-semibold text-gray-600">Navn</dt>
+              <dd>{profile.name || <span className="text-gray-400">ingen</span>}</dd>
+            </div>
+            <div>
+              <dt className="font-semibold text-gray-600">Alder</dt>
+              <dd>
+                {profile.age != null ? profile.age : <span className="text-gray-400">ingen</span>}
+              </dd>
+            </div>
+            <div>
+              <dt className="font-semibold text-gray-600">Email</dt>
+              <dd>
+                {profile.email || <span className="text-gray-400">ingen</span>}
+              </dd>
+            </div>
+            <div>
+              <dt className="font-semibold text-gray-600">Bio</dt>
+              <dd>
+                {profile.bio || <span className="text-gray-400">ingen</span>}
+              </dd>
+            </div>
+          </dl>
 
-      {/* Placeholder til DEL 5 – Slet profil */}
-      <div className="mt-6">
-        <p className="text-xs text-gray-500">
-          Senere (DEL 5) tilføjer vi her en rød{" "}
-          <span className="font-semibold">“Slet profil”</span>-knap.
-        </p>
-      </div>
+          <div className="flex gap-3">
+            {/* Rediger-knap kan vi lave i en senere del */}
+            <button
+              type="button"
+              onClick={handleDelete}
+              disabled={deleting}
+              className="rounded bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700 disabled:opacity-60"
+            >
+              {deleting ? "Sletter…" : "Slet profil"}
+            </button>
+          </div>
+        </>
+      )}
     </main>
   );
 }
