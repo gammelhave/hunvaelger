@@ -1,13 +1,7 @@
 // app/admin/profiles/page.tsx
-import dynamic from "next/dynamic";
-
-// Dynamisk import af client-komponenten uden SSR
-const AdminProfilesClient = dynamic(
-  () => import("./AdminProfilesClient"),
-  { ssr: false }
-);
+import AdminProfilesClient from "./AdminProfilesClient";
 
 export default function AdminProfilesPage() {
-  // Denne komponent kører kun på serveren og har ingen hooks
+  // Ingen hooks, ingen "use client", bare render client-komponenten
   return <AdminProfilesClient />;
 }
