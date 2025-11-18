@@ -1,3 +1,4 @@
+// app/admin/profiles/AdminProfilesClient.tsx
 "use client";
 
 import { useSession } from "next-auth/react";
@@ -25,7 +26,7 @@ export default function AdminProfilesClient() {
   }
 
   if (status === "unauthenticated") {
-    // Vi er på vej til login – vis bare en kort besked
+    // Vi er på vej til login – kort besked
     return (
       <main className="mx-auto max-w-2xl px-4 py-10">
         <p>Sender dig til admin login…</p>
@@ -44,8 +45,7 @@ export default function AdminProfilesClient() {
       </p>
       <p className="mt-4">
         Dette er den simple admin-profilside uden database endnu.
-        Nu hvor login-tjekket virker her, kan vi bagefter bygge
-        liste over profiler og CSV-export ovenpå.
+        Når denne virker stabilt, kobler vi profil-listen og CSV-export på.
       </p>
     </main>
   );
