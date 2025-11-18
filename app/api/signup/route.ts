@@ -46,7 +46,11 @@ export async function POST(req: Request) {
 
     if (typeof confirm === "string" && confirm !== password) {
       return NextResponse.json(
-        { ok: false, error: "VALIDATION", message: "Adgangskoderne matcher ikke" },
+        {
+          ok: false,
+          error: "VALIDATION",
+          message: "Adgangskoderne matcher ikke",
+        },
         { status: 400 }
       );
     }
@@ -55,21 +59,25 @@ export async function POST(req: Request) {
     const existing = await prisma.user.findUnique({ where: { email } });
     if (existing) {
       return NextResponse.json(
-        { ok: false, error: "DUPLICATE", message: "E-mail er allerede registreret" },
+        {
+          ok: false,
+          error: "DUPLICATE",
+          message: "E-mail er allerede registreret",
+        },
         { status: 409 }
       );
     }
 
     const hash = await bcrypt.hash(password, 10);
     const fallbackName =
-      name ??
-      (email.includes("@") ? email.split("@")[0] : "Bruger");
+      name ?? (email.includes("@") ? email.split("@")[0] : "Bruger");
 
-    // Opret bruger + (valgfri) profil i én transaktion
+    // Opret bruger + profil i én transaktion
     const result = await prisma.$transaction(async (tx) => {
       const user = await tx.user.create({
         data: {
           email,
+          // VIGTIGT: gem hashet i feltet `password`, som Prisma kræver
           password: hash,
         },
       });
@@ -78,7 +86,7 @@ export async function POST(req: Request) {
         data: {
           userId: user.id,
           name: fallbackName,
-          age: age ?? 0, // 0 hvis ikke angivet (gør det nemt på UI)
+          age: age ?? 0,
           bio: bio ?? null,
           images: [], // tom liste til billeder
         },
@@ -92,13 +100,17 @@ export async function POST(req: Request) {
       { status: 201 }
     );
   } catch (err: any) {
-    // Prisma unique constraint?
     if (err?.code === "P2002") {
       return NextResponse.json(
-        { ok: false, error: "DUPLICATE", message: "E-mail er allerede registreret" },
+        {
+          ok: false,
+          error: "DUPLICATE",
+          message: "E-mail er allerede registreret",
+        },
         { status: 409 }
       );
     }
+
     return NextResponse.json(
       {
         ok: false,

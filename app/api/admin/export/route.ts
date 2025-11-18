@@ -1,63 +1,57 @@
-import { NextResponse } from "next/server"
-import { readProfiles } from "@/lib/db-kv"
+// app/api/admin/export/route.ts
+import { NextResponse } from "next/server";
+import { prisma } from "@/lib/prisma";
 
-export const dynamic = "force-dynamic"
+export async function GET() {
+  try {
+    const profiles = await prisma.profile.findMany({
+      orderBy: { createdAt: "desc" },
+    });
 
-function toCSV(rows: any[]) {
-  const header = ["id", "name", "age", "bio", "active", "deletedAt"]
-  const safe = (v: any) => {
-    if (v === null || v === undefined) return ""
-    const s = String(v)
-    // Escape: wrap in quotes if it has quotes/newlines/commas; double quotes inside
-    if (/[",\n]/.test(s)) return `"${s.replace(/"/g, '""')}"`
-    return s
-  }
-  const lines = [
-    header.join(","),
-    ...rows.map((r) => header.map((k) => safe(r[k])).join(",")),
-  ]
-  return lines.join("\n")
-}
+    // Byg CSV-header
+    const headers = ["id", "name", "age", "bio", "createdAt"];
+    const rows: string[] = [];
 
-export async function GET(req: Request) {
-  const url = new URL(req.url)
-  const format = (url.searchParams.get("format") || "csv").toLowerCase()
+    rows.push(headers.join(";")); // semikolon så det spiller fint i dansk Excel
 
-  const all = await readProfiles()
-  // inkluderer både aktive og inaktive; det er admin-eksport
-  const rows = all.map((p) => ({
-    id: p.id,
-    name: p.name ?? "",
-    age: p.age ?? "",
-    bio: p.bio ?? "",
-    active: p.active !== false, // default true
-    deletedAt: p.deletedAt ?? "",
-  }))
+    for (const p of profiles) {
+      const id = p.id ?? "";
+      const name = (p as any).name ?? "";
+      const age = (p as any).age ?? "";
+      const bio = (p as any).bio ?? "";
+      const createdAt = p.createdAt
+        ? new Date(p.createdAt).toISOString()
+        : "";
 
-  const ts = new Date()
-  const pad = (n: number) => n.toString().padStart(2, "0")
-  const fnameBase = `profiles-${ts.getFullYear()}${pad(ts.getMonth() + 1)}${pad(ts.getDate())}-${pad(ts.getHours())}${pad(ts.getMinutes())}`
+      // Enkelt escaping af semikolon og nye linjer
+      const safe = (value: string) =>
+        `"${String(value).replace(/"/g, '""').replace(/\r?\n/g, " ")}"`;
 
-  if (format === "json") {
-    const body = JSON.stringify({ profiles: rows }, null, 2)
-    return new NextResponse(body, {
+      rows.push(
+        [
+          safe(id),
+          safe(String(name)),
+          safe(String(age)),
+          safe(String(bio)),
+          safe(createdAt),
+        ].join(";")
+      );
+    }
+
+    const csv = rows.join("\r\n");
+
+    return new NextResponse(csv, {
       status: 200,
       headers: {
-        "Content-Type": "application/json; charset=utf-8",
-        "Content-Disposition": `attachment; filename="${fnameBase}.json"`,
-        "Cache-Control": "no-store",
+        "Content-Type": "text/csv; charset=utf-8",
+        "Content-Disposition": `attachment; filename="profiler.csv"`,
       },
-    })
+    });
+  } catch (err) {
+    console.error("EXPORT ERROR:", err);
+    return NextResponse.json(
+      { ok: false, error: "Kunne ikke eksportere profiler" },
+      { status: 500 }
+    );
   }
-
-  // default: CSV
-  const csv = toCSV(rows)
-  return new NextResponse(csv, {
-    status: 200,
-    headers: {
-      "Content-Type": "text/csv; charset=utf-8",
-      "Content-Disposition": `attachment; filename="${fnameBase}.csv"`,
-      "Cache-Control": "no-store",
-    },
-  })
 }

@@ -1,13 +1,12 @@
 // middleware.ts
 import { NextResponse } from "next/server";
-import type { NextRequest } from "next/server";
 
-export function middleware(_req: NextRequest) {
-  // Gør ingenting – alt passerer
+// Ingen logik – bare lad alt passere
+export function middleware() {
   return NextResponse.next();
 }
 
-// Ingen matcher – middleware er i praksis slået fra
+// Tom matcher = middleware kører slet ikke
 export const config = {
   matcher: [],
 };

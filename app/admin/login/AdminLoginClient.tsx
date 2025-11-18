@@ -17,26 +17,33 @@ export default function AdminLoginClient() {
     setError(null);
     setLoading(true);
 
-    const res = await signIn("credentials", {
-      redirect: false,
-      email,
-      password,
-    });
+    try {
+      const res = await signIn("credentials", {
+        redirect: false,
+        email,
+        password,
+      });
 
-    setLoading(false);
+      console.log("SIGNIN RESULT:", res);
 
-    if (!res) {
-      setError("Noget gik galt. Prøv igen.");
-      return;
+      setLoading(false);
+
+      if (!res) {
+        setError("Noget gik galt. Prøv igen.");
+        return;
+      }
+
+      if (res.error) {
+        setError("Forkert email eller adgangskode.");
+        return;
+      }
+
+      router.push("/admin");
+    } catch (err) {
+      console.error("SIGNIN ERROR:", err);
+      setLoading(false);
+      setError("Teknisk fejl ved login.");
     }
-
-    if (res.error) {
-      setError("Forkert email eller adgangskode.");
-      return;
-    }
-
-    // Succes: send til /admin
-    router.push("/admin");
   }
 
   return (
@@ -49,10 +56,7 @@ export default function AdminLoginClient() {
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label
-              className="block text-sm font-medium mb-1"
-              htmlFor="email"
-            >
+            <label className="block text-sm font-medium mb-1" htmlFor="email">
               Email
             </label>
             <input
