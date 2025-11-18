@@ -1,106 +1,79 @@
 // app/admin/profiles/page.tsx
-"use client";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/app/api/auth/[...nextauth]/route";
+import { redirect } from "next/navigation";
+import { prisma } from "@/lib/prisma";
+import Link from "next/link";
 
-import { useEffect, useState } from "react";
+export default async function AdminProfilesPage() {
+  // Kræv admin-login
+  const session = await getServerSession(authOptions);
+  const email = session?.user?.email ?? null;
 
-type ProfileDto = {
-  id: string;
-  name: string | null;
-  age: number;
-  bio: string | null;
-  userEmail: string;
-};
+  if (!email) {
+    redirect("/admin/login?next=/admin/profiles");
+  }
 
-export default function AdminProfilesPage() {
-  const [profiles, setProfiles] = useState<ProfileDto[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  // Hent alle profiler direkte fra databasen
+  const profiles = await prisma.profile.findMany({
+    orderBy: { createdAt: "desc" },
+    include: {
+      user: {
+        select: {
+          email: true,
+        },
+      },
+    },
+  });
 
-  useEffect(() => {
-    const run = async () => {
-      try {
-        setLoading(true);
-        setError(null);
-
-        const res = await fetch("/api/admin/profiles", {
-          method: "GET",
-          headers: {
-            Accept: "application/json",
-          },
-          cache: "no-store",
-        });
-
-        if (!res.ok) {
-          const text = await res.text();
-          throw new Error(
-            `Fejl fra /api/admin/profiles: ${res.status} ${res.statusText} – ${text}`
-          );
-        }
-
-        const json = await res.json();
-        const list: ProfileDto[] = json.profiles ?? [];
-        setProfiles(list);
-      } catch (e: any) {
-        console.error("Fejl ved hentning af profiler:", e);
-        setError(e?.message ?? "Ukendt fejl");
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    run();
-  }, []);
+  const count = profiles.length;
 
   return (
-    <main className="mx-auto max-w-3xl px-4 py-10">
+    <main className="mx-auto max-w-4xl px-4 py-10">
       <h1 className="text-3xl font-semibold mb-4">Admin – profiler</h1>
 
-      {loading && <p className="text-gray-500">Henter profiler…</p>}
+      <p className="text-sm text-gray-600 mb-6">
+        Der er <span className="font-semibold">{count}</span>{" "}
+        {count === 1 ? "profil" : "profiler"} i systemet.
+      </p>
 
-      {!loading && error && (
-        <div className="mb-6 rounded-md border border-red-300 bg-red-50 px-4 py-3 text-sm text-red-800">
-          <p className="font-semibold">Kunne ikke hente profiler.</p>
-          <p className="mt-1">
-            Tekniske detaljer: <code>{error}</code>
-          </p>
-        </div>
-      )}
-
-      {!loading && !error && (
-        <>
-          <p className="text-gray-600 mb-6">
-            Der er {profiles.length} profiler i systemet.
-          </p>
-
-          {profiles.length === 0 && (
-            <p className="text-gray-500">Ingen profiler endnu.</p>
-          )}
-
-          {profiles.length > 0 && (
-            <table className="w-full text-left border-collapse">
-              <thead>
-                <tr className="border-b">
-                  <th className="py-2">Navn</th>
-                  <th className="py-2">Alder</th>
-                  <th className="py-2">Email</th>
-                  <th className="py-2">Bio</th>
+      {count === 0 ? (
+        <p>Der er endnu ingen profiler.</p>
+      ) : (
+        <div className="overflow-x-auto rounded-lg border border-gray-200 bg-white">
+          <table className="min-w-full text-sm">
+            <thead className="bg-gray-50">
+              <tr className="text-left">
+                <th className="px-4 py-2 font-medium">Navn</th>
+                <th className="px-4 py-2 font-medium">Alder</th>
+                <th className="px-4 py-2 font-medium">Email</th>
+                <th className="px-4 py-2 font-medium">Bio</th>
+              </tr>
+            </thead>
+            <tbody>
+              {profiles.map((p) => (
+                <tr
+                  key={p.id}
+                  className="border-t border-gray-100 hover:bg-pink-50/60"
+                >
+                  <td className="px-4 py-2">
+                    <Link
+                      href={`/admin/profiles/${p.id}`}
+                      className="text-pink-600 hover:underline"
+                    >
+                      {p.name || "(uden navn)"}
+                    </Link>
+                  </td>
+                  <td className="px-4 py-2">{p.age ?? "–"}</td>
+                  <td className="px-4 py-2">{p.user?.email ?? "–"}</td>
+                  <td className="px-4 py-2 max-w-xs truncate">
+                    {p.bio ?? "–"}
+                  </td>
                 </tr>
-              </thead>
-              <tbody>
-                {profiles.map((p) => (
-                  <tr key={p.id} className="border-b hover:bg-pink-50">
-                    <td className="py-2">{p.name}</td>
-                    <td className="py-2">{p.age}</td>
-                    <td className="py-2">{p.userEmail}</td>
-                    <td className="py-2 text-sm text-gray-700">
-                      {p.bio ?? "—"}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-        </>
+              ))}
+            </tbody>
+          </table>
+        </div>
       )}
     </main>
   );
