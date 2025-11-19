@@ -69,7 +69,6 @@ export async function DELETE(req: Request, { params }: RouteContext) {
       );
     }
 
-    // Foreløbig sletter vi kun profilen. (User kan evt. tages i brug senere)
     await prisma.profile.delete({ where: { id } });
 
     return NextResponse.json({ ok: true });
