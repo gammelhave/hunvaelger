@@ -2,12 +2,15 @@
 import { prisma } from "@/lib/prisma";
 import { notFound } from "next/navigation";
 import Link from "next/link";
+import DeleteProfileButton from "./DeleteProfileButton";
 
 interface Props {
   params: { id: string };
 }
 
-export default async function AdminProfileDetail({ params }: Props) {
+export const dynamic = "force-dynamic";
+
+export default async function AdminProfileDetailPage({ params }: Props) {
   const profile = await prisma.profile.findUnique({
     where: { id: params.id },
     include: {
@@ -22,30 +25,48 @@ export default async function AdminProfileDetail({ params }: Props) {
   }
 
   return (
-    <main className="mx-auto max-w-2xl px-4 py-10">
-      <Link
-        href="/admin/profiles"
-        className="text-sm text-pink-600 hover:underline"
-      >
-        ← Tilbage til oversigten
-      </Link>
+    <main className="mx-auto max-w-3xl px-4 py-10">
+      <div className="mb-4">
+        <Link
+          href="/admin/profiles"
+          className="text-sm text-pink-600 hover:underline"
+        >
+          ← Tilbage til oversigten
+        </Link>
+      </div>
 
-      <h1 className="mt-4 text-3xl font-semibold mb-4">
-        Profil: {profile.name || "–"}
+      <h1 className="text-3xl font-semibold mb-4">
+        Admin – profil: {profile.name || "–"}
       </h1>
 
-      <dl className="space-y-2 text-sm">
+      <dl className="mb-8 space-y-3 text-sm">
+        <div>
+          <dt className="font-medium text-gray-700">Navn</dt>
+          <dd>{profile.name || <span className="text-gray-400">ingen</span>}</dd>
+        </div>
         <div>
           <dt className="font-medium text-gray-700">Email</dt>
-          <dd>{profile.user?.email ?? "ingen email"}</dd>
+          <dd>
+            {profile.user?.email || (
+              <span className="text-gray-400">ingen</span>
+            )}
+          </dd>
         </div>
         <div>
           <dt className="font-medium text-gray-700">Alder</dt>
-          <dd>{profile.age ?? "–"}</dd>
+          <dd>
+            {profile.age != null ? (
+              profile.age
+            ) : (
+              <span className="text-gray-400">ingen</span>
+            )}
+          </dd>
         </div>
         <div>
           <dt className="font-medium text-gray-700">Bio</dt>
-          <dd>{profile.bio || "–"}</dd>
+          <dd>
+            {profile.bio || <span className="text-gray-400">ingen</span>}
+          </dd>
         </div>
         <div>
           <dt className="font-medium text-gray-700">Oprettet</dt>
@@ -56,6 +77,11 @@ export default async function AdminProfileDetail({ params }: Props) {
           </dd>
         </div>
       </dl>
+
+      <div className="flex gap-3">
+        {/* Redigér-knap kan vi lave senere */}
+        <DeleteProfileButton id={profile.id} name={profile.name} />
+      </div>
     </main>
   );
 }
